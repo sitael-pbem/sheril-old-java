@@ -145,6 +145,7 @@ public class MessagesInfo extends MessagesAbstraits {
 	public static final String EV_COMMANDANT_DON_TECHNOLOGIE_0002 = "Le commandant {0} as transmis la technologie {2} au commandant {1}.";
 	public static final String EV_COMMANDANT_DON_TECHNOLOGIE_0003 = "Un commandant qui souhaite garder l'anonymat vous as transmis la technologie {0}.";
 	public static final String ER_COMMANDANT_DON_TECHNOLOGIE_0002 = "Impossible de transmettre la technologie {0} au commandant numéro {1} : il ne possède pas les prérequis à cette technologie.";
+	public static final String ER_COMMANDANT_DON_TECHNOLOGIE_0003 = "Impossible de transmettre plusieurs technologies par tour";
 
 	public static final String EV_COMMANDANT_ELIMINER_TECHNOLOGIE_0000 = "Vous venez d'abandonner toute connaissance sur la technologie {0}.";
 
@@ -320,6 +321,7 @@ public class MessagesInfo extends MessagesAbstraits {
 	public static final String EV_COMMANDANT_DON_PLAN_0003 = "Le commandant {0} vient de transmettre un plan de vaisseau au commandant {1}.";
 
 	public static final String ER_COMMANDANT_CREER_PLAN_0000 = "Impossible de créer le plan du vaisseau de nom {0} : Vous n'avez pas assez de centaures en ce moment!";
+	public static final String ER_COMMANDANT_CREER_PLAN_0002 = "Impossible de créer un autre plan : Vous ne pouvez pas créer plus d'un plan de vaisseau par tour";
 	public static final String EV_COMMANDANT_CREER_PLAN_0000 = "Design: Vous venez de créer le plan du vaisseau de nom {0}.";
 	public static final String EV_COMMANDANT_CREER_PLAN_0001 = "Vous venez de supprimer votre plan de vaisseau {0}.";
 

@@ -143,6 +143,15 @@ public class ReceptionOrdres {
 			System.out.println("VendorError:  " + e.getErrorCode());
 		}
 
+		// Tables à quota : on se contente de tracer le dépassement dans le log
+		// système. Le tri est fait par ordre dans resoudreMethode() (gardes
+		// « j >= NOMBRE_LIMITE_... »), qui laisse passer les N premiers et rend
+		// au commandant le message propre à la table.
+		//
+		// Cette liste NE DOIT PLUS vider `a` : le faire annulait le lot entier,
+		// si bien qu'un commandant posant 4 missions spéciales n'en voyait
+		// exécuter aucune, et que les gardes par ordre ci-dessous devenaient
+		// inatteignables (boucle sur un tableau vide).
 		if (((index == Const.ORDRE_ENROLER_LIEUTENANT) && (a.size() > Const.NOMBRE_LIMITE_ENROLER_LIEUTENANT))
 				|| ((index == Const.ORDRE_SERVICES_SPECIAUX) &&
 							(
@@ -152,7 +161,6 @@ public class ReceptionOrdres {
 				|| ((index == Const.ORDRE_DON_TECHNOLOGIE) && (a.size() > Const.NOMBRE_LIMITE_DON_TECHNOLOGIE))
 				|| ((index == Const.ORDRE_CREER_PLAN) && (a.size() > Const.NOMBRE_LIMITE_CREATION_PLAN))
 				|| ((index == Const.ORDRE_CREER_STRATEGIE) && (a.size() > Const.NOMBRE_LIMITE_CREATION_STRATEGIE))) {
-			a = new ArrayList();
 			Univers.ajouterErreur(c[iC].getNomNumeroHtml(), "ER_ORDRE_0002",
 					Const.NOMS_TABLES_ORDRES[index]);
 		}
@@ -199,17 +207,28 @@ public class ReceptionOrdres {
 					// traitements individuels
 					Object[] inter = new Object[1];
 					for (int j = 0; j < r.length; j++) {
-						// on va vérifier les ordres limités
-						if(index == Const.ORDRE_ENROLER_LIEUTENANT && j > 0){
+						// on va vérifier les ordres limités : les NOMBRE_LIMITE_...
+						// premiers sont exécutés, les suivants rejetés un par un.
+						// Les bornes viennent de Const, la même source que le
+						// contrôle de dépassement de getOrdres().
+						if(index == Const.ORDRE_ENROLER_LIEUTENANT && j >= Const.NOMBRE_LIMITE_ENROLER_LIEUTENANT){
 							c[iC].ajouterErreur("ER_COMMANDANT_ACHETER_LIEUTENANT_0002");
 							continue;
 						}
-						if(index == Const.ORDRE_CREER_STRATEGIE && j > 0){
+						if(index == Const.ORDRE_CREER_STRATEGIE && j >= Const.NOMBRE_LIMITE_CREATION_STRATEGIE){
 							c[iC].ajouterErreur("ER_COMMANDANT_CREER_STRATEGIE_0002");
 							continue;
 						}
-						if(index == Const.ORDRE_SERVICES_SPECIAUX && j > 2){
+						if(index == Const.ORDRE_SERVICES_SPECIAUX && j >= Const.NOMBRE_LIMITE_SERVICES_SPECIAUX){
 							c[iC].ajouterErreur("ER_COMMANDANT_MISSION_SPECIALE_0002");
+							continue;
+						}
+						if(index == Const.ORDRE_DON_TECHNOLOGIE && j >= Const.NOMBRE_LIMITE_DON_TECHNOLOGIE){
+							c[iC].ajouterErreur("ER_COMMANDANT_DON_TECHNOLOGIE_0003");
+							continue;
+						}
+						if(index == Const.ORDRE_CREER_PLAN && j >= Const.NOMBRE_LIMITE_CREATION_PLAN){
+							c[iC].ajouterErreur("ER_COMMANDANT_CREER_PLAN_0002");
 							continue;
 						}
 
