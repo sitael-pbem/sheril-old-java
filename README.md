@@ -46,3 +46,19 @@ docker compose exec engine bash ./scripts/create-jar.sh
 docker compose exec engine bash ./scripts/clean.sh
 ```
 
+### relire visuellement les rapports produits par un tour
+
+Le moteur écrit déjà les rapports en HTML statique, un répertoire par commandant,
+sous `data/tour<N>/rapports/<numCommandant>tour<N>/`. Le script suivant les rend en
+images et en PDF, et bâtit une galerie parcourable pour les relire d'un coup d'œil :
+
+```shell
+python3 scripts/capture-rapports.py data/tour3/rapports --archiver
+open capture-rapports/index.html
+```
+
+Il ne dépend que de `python3` et d'un Chrome ou Chromium local. `--archiver` recopie
+au passage le HTML source, qui vit dans `data/` (ignoré par git, réécrit à chaque tour).
+`python3 scripts/capture-rapports.py --help` liste les options : filtrage par
+commandant, par page, taille du viewport, parallélisme.
+

@@ -20,3 +20,5 @@ errata
 /php/stats/*
 /php/tour.txt
 carnet.txt
+__pycache__/
+capture-rapports/
