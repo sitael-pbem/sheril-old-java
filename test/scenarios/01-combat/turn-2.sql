@@ -1,0 +1,3 @@
+-- Aucun ordre neuf : on laisse la flotte d'Alpha arriver et le combat se
+-- résoudre. Les tables d'ordres du tour précédent sont vidées par
+-- ProductionOrdres.viderAnciensOrdres, rien à nettoyer ici.

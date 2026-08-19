@@ -1,0 +1,25 @@
+# Le golden détecte le changement, ces assertions garantissent qu'il reste
+# quelque chose à détecter. Chaque ligne non vide et non commentée doit
+# apparaître telle quelle dans le dump du dernier tour.
+#
+# "tour" vaut TOURS+1 : dump-tour-N.txt est capturé après le newRound du
+# tour N, et le premier newRound (inscription, avant la boucle des tours)
+# fait déjà passer le compteur interne de 0 à 1.
+tour = 3
+commandant.1.nom = Alpha
+commandant.2.nom = Beta
+commandant.1.humain = true
+commandant.2.humain = true
+#
+# Effet de jeu : la puissance de la flotte 0 d'Alpha après le combat contre
+# Beta. Un simple décompte de vaisseaux ne suffit pas ici : la flotte perd
+# des vaisseaux à chaque tour même sans ordre ni combat (attrition de fond,
+# vérifié en rejouant le scénario sans l'ordre deplacer_flotte : 73 -> 69 ->
+# 66 dans les deux cas), donc un nombre de vaisseaux identique au tour 2 ne
+# distingue pas un combat réel d'un scénario dégénéré. La puissance, elle,
+# encaisse les dégâts du combat : rejoué sans l'ordre de mouvement (flotte
+# restée à sa capitale, aucun affrontement), elle vaut 1086 ; avec le combat
+# contre Beta, elle vaut 1054. Cette ligne serait donc fausse si le marqueur
+# de mouvement ne se résolvait plus, si la directive d'attaque cessait
+# d'être honorée, ou si le combat ne se déclenchait plus.
+commandant.1.flotte.0.puissance = 1054
