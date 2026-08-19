@@ -31,6 +31,38 @@ public class Start {
             System.exit(-1);
         }
 
+        // --- Résolution du seed RNG (priorité : CLI --seed=N > env SHERIL_SEED
+        // > RANDOM_SEED de config.properties > défaut aléatoire). Doit précéder
+        // toute création d'Univers pour que HASARD soit seedé. Le repli sur
+        // Const.RANDOM_SEED est appliqué directement dans Univers (à l'affectation
+        // de HASARD), pas ici : cf. Univers.setSeed / Univers.HASARD.
+        Long seed = null;
+        for (String a : args) {
+            if (a != null && a.startsWith("--seed=")) {
+                try { seed = Long.parseLong(a.substring("--seed=".length()).trim()); }
+                catch (NumberFormatException e) {
+                    System.out.println("[RNG] --seed invalide, ignoré: " + a);
+                }
+            }
+        }
+        if (seed == null) {
+            String env = System.getenv("SHERIL_SEED");
+            if (env != null && !env.trim().isEmpty()) {
+                try { seed = Long.parseLong(env.trim()); }
+                catch (NumberFormatException e) {
+                    System.out.println("[RNG] SHERIL_SEED invalide, ignoré: " + env);
+                }
+            }
+        }
+        Univers.setSeed(seed);
+        if (seed != null) {
+            System.out.println("[RNG] seed=" + seed + " (fixe, reproductible, via --seed/SHERIL_SEED)");
+        } else if (Const.RANDOM_SEED != null) {
+            System.out.println("[RNG] seed=" + Const.RANDOM_SEED + " (fixe, reproductible, via config.properties)");
+        } else {
+            System.out.println("[RNG] seed=aleatoire (defaut, non reproductible)");
+        }
+
         if (args[0].equals("init")) {
             initUnivers();
         } else if (args[0].equals("addNewGalaxy")) {

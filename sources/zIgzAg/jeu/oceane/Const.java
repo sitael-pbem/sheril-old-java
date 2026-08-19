@@ -33,6 +33,9 @@ public class Const {
     public static Boolean FAKE_TURN = false;
     public static String PATH_PHP = "./php/";
 
+    /** Graine du générateur aléatoire. null = comportement de production. */
+    public static Long RANDOM_SEED = null;
+
     static {
         Properties properties = new Properties();
         try {
@@ -67,6 +70,11 @@ public class Const {
             String pathPhpProp = properties.getProperty("PATH_PHP");
             if (pathPhpProp != null && !pathPhpProp.isEmpty()) {
               PATH_PHP = pathPhpProp;
+            }
+
+            String seedProp = properties.getProperty("RANDOM_SEED");
+            if (seedProp != null && !seedProp.trim().isEmpty()) {
+              RANDOM_SEED = Long.valueOf(seedProp.trim());
             }
 
         } catch (IOException e) {

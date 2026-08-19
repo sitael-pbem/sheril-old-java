@@ -55,7 +55,7 @@ public class AjoutDeGalaxie {
                 cellules.add(new int[]{row, col});
             }
         }
-        java.util.Collections.shuffle(cellules);
+        java.util.Collections.shuffle(cellules, Univers.getHasard()); // RNG central seedable
 
         System.out.println("Création systèmes");
         for (int i = 0; i < nbSystemes && i < cellules.size(); i++) {
