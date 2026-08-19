@@ -67,7 +67,23 @@ done
 # Chemins relatifs à data/, triés, pour comparer terme à terme.
 XML_A="$(cd "$REPO/test/work/det-a" && /usr/bin/find data -name '*.xml' | sort)"
 XML_B="$(cd "$REPO/test/work/det-b" && /usr/bin/find data -name '*.xml' | sort)"
-if [ "$XML_A" != "$XML_B" ]; then
+
+# Garde de non-vacuité (même motif que run-scenario.sh:165-172 et
+# check-composants-determinisme.sh:37-45) : un `find` sur un répertoire
+# existant mais vide de résultat ne fait pas échouer le pipeline (rien à voir
+# avec le chemin absent, seul cas que couvrirait pipefail), et une boucle
+# `while read` sur une chaîne vide ne lit qu'une ligne vide qu'elle escamote.
+# Sans cette garde, deux répétitions sans aucun rapport XML donneraient
+# XML_A = XML_B = "" : zéro comparaison effectuée, ECHECS inchangé, et le
+# script conclurait "reproductible" sans avoir rien comparé. Le message dit
+# ce qui est réellement constaté (aucun rapport comparé), pas un problème de
+# déterminisme.
+n_xml_a=0
+[ -n "$XML_A" ] && n_xml_a="$(printf '%s\n' "$XML_A" | /usr/bin/wc -l | tr -d ' ')"
+if [ "$n_xml_a" -eq 0 ]; then
+  echo "ECHEC: aucun rapport XML trouvé dans $REPO/test/work/det-a, la comparaison des rapports n'a rien comparé" >&2
+  ECHECS=$((ECHECS+1))
+elif [ "$XML_A" != "$XML_B" ]; then
   echo "ECHEC: la liste des rapports XML produits diffère entre les deux répétitions" >&2
   ECHECS=$((ECHECS+1))
 else
