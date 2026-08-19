@@ -44,6 +44,18 @@ joue > "$WORK/b.txt"
 
 test -s "$WORK/a.txt" || { echo "ECHEC: aucune description produite"; exit 1; }
 
+# Garde de non-vacuité : une capture vide est déjà écartée ci-dessus, mais une
+# capture tronquée de façon identique dans les deux JVM (ex. jshell interrompu
+# après les premiers plans) resterait non vide et comparerait deux fichiers
+# identiques à tort. On exige la présence des plans à composants multiples
+# cités dans la spec du chantier, chacun avec au moins un séparateur "<BR>"
+# (donc au moins deux composants distincts), ce qui ne peut être vrai que si
+# la description a été produite en entier.
+for plan in "Destroyer standard" "Croiseur standard" "Supercroiseur standard"; do
+  grep -q "^$plan | .*<BR>" "$WORK/a.txt" \
+    || { echo "ECHEC: capture non significative, '$plan' absent ou réduit à un seul composant"; exit 1; }
+done
+
 if /usr/bin/diff -u "$WORK/a.txt" "$WORK/b.txt" > "$WORK/diff.txt"; then
   echo "OK: $(wc -l < "$WORK/a.txt") plans décrits à l'identique dans deux JVM"
 else
