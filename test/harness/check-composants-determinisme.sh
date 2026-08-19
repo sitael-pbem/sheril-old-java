@@ -7,6 +7,19 @@
 # sont donc hachées par valeur, pas par identité mémoire, et leur ordre d'itération
 # est déjà déterministe (String.hashCode et Integer.hashCode sont spécifiés par le
 # JDK et stables d'une machine à l'autre). Ce script l'atteste et sera câblé en CI.
+#
+# CE QUE SON VERT ATTESTE, ET CE QU'IL N'ATTESTE PAS. Les deux répétitions sont
+# deux processus de LA MÊME JVM, même version, même fournisseur. Or sous HotSpot
+# le hachage d'identité par défaut est un xorshift par thread à graine
+# déterministe : deux processus de la même JVM rendent le même ordre de table
+# même quand la clé n'a ni equals ni hashCode. Ce script ne peut donc PAS rougir
+# pour la raison qui figure dans son titre, quelle que soit l'implémentation de
+# hashCode dans Technologie. Ce qu'il atteste réellement est plus étroit et
+# reste utile : la description est stable d'une exécution à l'autre, et la
+# capture n'est ni vide ni tronquée (garde de non-vacuité plus bas).
+# Le critère de falsification, si l'on veut vraiment tester la portabilité
+# inter-JVM : deux répétitions sous deux JDK de versions ou de fournisseurs
+# distincts, ou sous des -XX:hashCode= différents.
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

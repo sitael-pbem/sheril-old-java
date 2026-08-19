@@ -19,6 +19,17 @@
 # l'oracle). Vécu : reglerEncheresMarche() itérait une Map<OffreMarche,...>
 # hachée par identité mémoire (avant sa correction, SHRL-46 task-8) sans
 # qu'aucun scénario ne puisse le révéler via les seuls dumps.
+#
+# MÊME RÉSERVE QUE check-composants-determinisme.sh sur la portée du vert. Les
+# deux répétitions tournent dans la même JVM, avec la même graine : ce script
+# atteste que le moteur rejoue à l'identique dans des conditions identiques, ce
+# qui est exactement ce que le harnais lui demande. Il n'atteste RIEN sur la
+# portabilité d'une JVM à l'autre, le hachage d'identité par défaut de HotSpot
+# étant un xorshift par thread à graine déterministe, donc reproductible d'un
+# processus à l'autre de la même JVM. Ne pas lire son vert comme « aucune Map
+# hachée par identité ne peut nuire ». Le critère de falsification est le même :
+# deux JDK de versions ou de fournisseurs distincts, ou deux -XX:hashCode=
+# différents.
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

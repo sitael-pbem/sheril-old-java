@@ -1,4 +1,7 @@
--- Deux voix sur trois pour exclure Banni. Le plan initial lisait VOTE comme
+-- Deux voix pour exclure Banni, mais UNE SEULE aurait suffi : le seuil est
+-- nbVoix >= nbMembres / 2 en division entière, soit >= 1 pour trois membres.
+-- Le second vote ne teste donc pas le seuil, il n'exerce que le cumul des voix.
+-- Le plan initial lisait VOTE comme
 -- un booléen ("1 = exclusion") : c'est faux, vérifié à l'exploration (un
 -- premier essai a exclu Chef au lieu de Banni). ReceptionOrdres.exclure_alliance
 -- transmet (o[0]=ALLIANCE, o[1]=VOTE) à Commandant.voterExclusionCommandant

@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Contrôle minimal de Start dumpState : la commande existe, produit un fichier
-# non vide, trié, et contenant les sections attendues.
+# non vide contenant les sections attendues, au format « clé = valeur ».
+#
+# Le dump n'est PAS trié au sens de sort(1), et ce script ne le vérifie pas : il
+# est écrit dans un ordre de clé CONSTANT d'une exécution à l'autre, ce qui est
+# la seule propriété dont le harnais a besoin. Un `sort -c` échouerait, l'ordre
+# des positions étant numérique par composante (0_1_6 précède 0_1_14) et non
+# lexicographique.
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

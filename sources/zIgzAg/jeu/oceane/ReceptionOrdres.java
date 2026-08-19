@@ -283,10 +283,17 @@ public class ReceptionOrdres {
 		// ArrayList en ordre d'insertion (Commentaire.java:17-42) : un
 		// acheteur qui remporte plusieurs offres le même tour voit donc
 		// l'ordre de ces messages dans son rapport varier avec l'ordre de
-		// entrySet(), sans que rien côté état du jeu (centaures, stocks) n'en
-		// dépende avec la logique de règlement actuelle. On règle donc les
-		// offres dans l'ordre croissant de leur identifiant, qui est stable,
-		// pour rendre aussi cet ordre de rapport déterministe.
+		// entrySet(). Sur le chemin marchandise, le seul qu'exercent les
+		// scénarios, l'issue par offre ne dépend pas de cet ordre :
+		// acheterGalactique ne teste jamais la solvabilité au règlement, donc
+		// deux offres ne se disputent rien, et ajouterMarchandise
+		// (Possession.java:210-218) est commutatif, addition des quantités
+		// comme clôture de prix. Ne pas généraliser au-delà : le débit des
+		// centaures passe par une addition de float, qui n'est pas
+		// associative, donc deux règlements au même acheteur peuvent différer
+		// au dernier bit selon l'ordre. On règle les offres dans l'ordre
+		// croissant de leur identifiant, qui est stable, pour rendre aussi
+		// l'ordre des messages du rapport déterministe.
 		List<Map.Entry<OffreMarche, List<Enchere>>> offresTriees =
 				new ArrayList<>(encheresMarche.entrySet());
 		offresTriees.sort(Comparator.comparingInt(e -> e.getKey().getId()));

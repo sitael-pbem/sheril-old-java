@@ -35,6 +35,40 @@
 # des tours distincts, jamais les écrire dans le même turn-N.sql en comptant
 # sur l'ordre d'écriture.
 #
+# PIÈGE À CONNAÎTRE (le plus coûteux du chantier, SHRL-46) : setup.sql ne peut
+# accorder AUCUN état d'univers. Les tables SQL ne portent que les inscriptions
+# et les ordres ; l'état du jeu (technologies connues, possessions, flottes,
+# planètes) vit dans data/, écrit par le moteur, et aucune table d'ordres ne
+# permet d'y injecter quoi que ce soit avant le premier tour. Conséquence
+# directe et non contournable : tout ordre exigeant une technologie hors de
+# Const.RACE_TECHNOLOGIES[race] et hors du domaine public initial (seuls mineI
+# et chantierI, DeroulementDuTour.java:23-25) coûte un TOUR DE RECHERCHE
+# PRÉALABLE, la technologie n'étant connue qu'à la fin de la résolution du tour
+# où elle est cherchée. C'est la raison pour laquelle quatre des cinq scénarios
+# consacrent leur tour 1 à affecter_recherche. Toute technologie de niveau 0
+# sans parent est cherchable dès le tour 1 (Commandant.peutChercherTechnologie
+# → Technologie.listeDesTechnologiesAtteignables, Technologie.java:245-267) ;
+# une technologie à parent en coûte autant de tours qu'elle a d'ancêtres
+# inconnus. Vécu : creer_strategie exige stratcoI, creer_alliance exige diploI,
+# ni l'une ni l'autre connue d'aucune race au départ.
+#
+# PIÈGE À CONNAÎTRE (généralisation des trois précédents, SHRL-46) : une
+# colonne d'ordre ne porte pas toujours ce que son nom suggère, et le moteur
+# accepte un mauvais argument SANS émettre d'erreur. La garde <m type="ERR">
+# de run-scenario.sh ne rattrape donc pas cette classe de faute : seule une
+# assertion sur l'effet de jeu la voit. Quatre cas rencontrés :
+#   - deplacer_flotte.POSX alimente Y et POSY alimente X (cf. piège ci-dessus) ;
+#   - exclure_alliance.VOTE porte le NUMÉRO du commandant visé, pas un booléen
+#     (ReceptionOrdres.java:481-482 vers voterExclusionCommandant(int, int)).
+#     Un premier essai a exclu le mauvais commandant sans la moindre erreur,
+#     et c'est l'assertion alliance.0.membres qui l'a rattrapé, pas la garde ;
+#   - aa_vaisseaux.VAISSEAU est un indice de quota de 1 à 5, pas un numéro de
+#     plan, et toute valeur hors bornes est ignorée en silence
+#     (Flotte.choixFlotteDeDepart, Flotte.java:257-289) ;
+#   - le dump écrit marchandise.<code> = <PRIX>/<QUANTITE> (cf. piège plus bas).
+# Règle qui en découle : tout scénario doit porter au moins une assertion sur
+# un EFFET DE JEU observable, jamais seulement sur la présence des acteurs.
+#
 # PIÈGE À CONNAÎTRE (ronde de correction 1 de la tâche 8, SHRL-46) : l'oracle
 # de déterminisme (check-determinisme.sh) ne peut attester QUE de ce que ses
 # artefacts comparés montrent. Avant cette ronde, il ne comparait que les

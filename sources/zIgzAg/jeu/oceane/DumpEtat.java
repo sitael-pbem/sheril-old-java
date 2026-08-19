@@ -1,6 +1,15 @@
 // Sérialisation texte canonique de l'état de l'univers.
 // Sert de référence de non-régression et d'outil de diagnostic.
-// Aucune logique de jeu ici : cette classe lit, elle ne modifie rien.
+//
+// Aucune logique de jeu ici : cette classe n'écrit aucun état de jeu, elle ne
+// fait aucun appel à sauvegarder(). Elle n'est pour autant PAS sans effet sur
+// le disque, et il faut le savoir avant de la croire inoffensive : le
+// new Univers(true, ...) qu'elle construit passe par chargerNumeroTour() donc
+// par Chemin.initialiserChemins(), qui crée les répertoires du tour courant et
+// recopie deux gabarits statiques ; et charger() ouvre par
+// ecrireDansCarnetDeBord (Univers.java:1475), qui ajoute une ligne à
+// data/carnet.txt. Mesuré par empreintes du répertoire de travail avant et
+// après un Start dumpState.
 
 package zIgzAg.jeu.oceane;
 
