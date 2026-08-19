@@ -47,14 +47,20 @@ test -s "$WORK/a.txt" || { echo "ECHEC: aucune description produite"; exit 1; }
 # Garde de non-vacuité : une capture vide est déjà écartée ci-dessus, mais une
 # capture tronquée de façon identique dans les deux JVM (ex. jshell interrompu
 # après les premiers plans) resterait non vide et comparerait deux fichiers
-# identiques à tort. On exige la présence des plans à composants multiples
-# cités dans la spec du chantier, chacun avec au moins un séparateur "<BR>"
-# (donc au moins deux composants distincts), ce qui ne peut être vrai que si
-# la description a été produite en entier.
-for plan in "Destroyer standard" "Croiseur standard" "Supercroiseur standard"; do
-  grep -q "^$plan | .*<BR>" "$WORK/a.txt" \
-    || { echo "ECHEC: capture non significative, '$plan' absent ou réduit à un seul composant"; exit 1; }
-done
+# identiques à tort. Critère structurel, sans dépendre d'un nom de plan précis
+# (qui peut être renommé/rééquilibré dans data/fichiers sans rapport avec le
+# déterminisme testé) : on exige un nombre minimal de plans à composants
+# multiples, c'est-à-dire de lignes contenant au moins un séparateur "<BR>".
+# Ce sont les seules lignes pertinentes pour un test d'ordre d'itération : un
+# plan à un seul composant ne peut pas révéler une permutation. Le seuil est
+# volontairement bas par rapport au jeu actuel (marge), il garde contre une
+# troncature, pas contre une évolution du contenu ludique.
+SEUIL_MIN_COMPOSANTS_MULTIPLES=8
+n_composants_multiples="$(grep -c '<BR>' "$WORK/a.txt" || true)"
+if [ "${n_composants_multiples:-0}" -lt "$SEUIL_MIN_COMPOSANTS_MULTIPLES" ]; then
+  echo "ECHEC: capture trop courte pour être significative ($n_composants_multiples plan(s) à composants multiples, attendu >= $SEUIL_MIN_COMPOSANTS_MULTIPLES)"
+  exit 1
+fi
 
 if /usr/bin/diff -u "$WORK/a.txt" "$WORK/b.txt" > "$WORK/diff.txt"; then
   echo "OK: $(wc -l < "$WORK/a.txt") plans décrits à l'identique dans deux JVM"
