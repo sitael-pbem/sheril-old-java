@@ -23,3 +23,5 @@ carnet.txt
 
 # repertoire de travail jetable du harnais de non-regression
 test/work/
+__pycache__/
+capture-rapports/
