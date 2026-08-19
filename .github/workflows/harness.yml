@@ -67,6 +67,24 @@ jobs:
         run: |
           set -euo pipefail
           scenarios=$(find test/scenarios -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+          # Garde de non-vacuité (même motif que run-scenario.sh pour le
+          # compteur de XML et les assertions, check-determinisme.sh pour les
+          # rapports, check-composants-determinisme.sh pour le seuil
+          # minimal) : un test/scenarios/ présent mais sans sous-répertoire
+          # fait rendre "find" avec un statut 0 et une sortie vide, ce n'est
+          # pas un cas d'échec pour "find" contrairement à un chemin absent
+          # (qui ferait tomber le pipe sous pipefail). Sans cette garde, le
+          # JSON vaudrait "[]", un JSON valide : ce step réussirait, "build"
+          # réussirait, le jar se publierait, et les deux jobs matrixés sur
+          # cette liste ("scenarios", "determinisme-scenarios") recevraient
+          # une matrice à zéro combinaison, donc n'exécuteraient rien du tout
+          # (skipped, pas en échec), sans qu'aucun job aval n'en dépende par
+          # needs pour faire basculer la conclusion du run. Le workflow
+          # entier serait vert sans avoir exercé un seul scénario.
+          if [ -z "$scenarios" ]; then
+            echo "ECHEC: aucun scénario trouvé sous test/scenarios/ (répertoire vide ou inexistant de sous-répertoires)" >&2
+            exit 1
+          fi
           echo "scénarios découverts:"
           echo "$scenarios"
           json=$(printf '%s\n' "$scenarios" | jq -R -s -c 'split("\n") | map(select(length > 0))')
