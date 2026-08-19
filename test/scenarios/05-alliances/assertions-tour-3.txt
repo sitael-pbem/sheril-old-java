@@ -1,0 +1,6 @@
+# Effet d'adherer_alliance + valider_adhesion_alliance (turn-3.sql), les deux
+# dans le même tour (ReceptionOrdres.adherer_alliance vérifie la présence de
+# l'ordre de validation via existenceOrdre, pas son traitement préalable).
+# Membre (2) et Banni (3) rejoignent : passage de 1 à 3 membres.
+tour = 4
+alliance.0.membres = 1,2,3

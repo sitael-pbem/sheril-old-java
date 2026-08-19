@@ -1,0 +1,12 @@
+# Effet de creer_alliance (turn-2.sql), rendu possible par diploI acquise au
+# tour 1 : la section alliance.0.* n'existe dans AUCUN dump avant ce tour,
+# c'est la clé absente la plus solide (elle ne peut être vraie sans
+# l'action). Chef (numéro 1) devient concepteur ET dirigeant dès la création
+# (Alliance.java:409, valable quel que soit le type d'alliance), seul
+# membre pour l'instant.
+tour = 3
+alliance.0.nom = Pacte du Nord
+alliance.0.type = démocratique
+alliance.0.concepteur = 1
+alliance.0.dirigeant = 1
+alliance.0.membres = 1

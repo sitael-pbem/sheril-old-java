@@ -1,0 +1,10 @@
+# Effet de la recherche affectée en turn-1.sql : progcoI est acquise en fin
+# de tour 1 (Commandant.resolutionProgressionRecherche, coût 50 points *
+# Const.MODIFICATEUR_DIFFICULTE_RECHERCHE = 200 points effectifs, atteints en
+# un tour à ce niveau de revenu, comme stratcoI/gestplaI dans les scénarios
+# précédents). "progcoI" est une clé absente de tout dump avant ce tour :
+# sans le modifier_budget et l'affecter_recherche de turn-1.sql, cette ligne
+# resterait "commandant.1.technologies = missI" (vérifié : la variante sans
+# turn-1.sql fait échouer cette assertion).
+tour = 2
+commandant.1.technologies = missI,progcoI

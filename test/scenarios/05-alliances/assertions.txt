@@ -1,0 +1,23 @@
+# Le golden détecte le changement, ces assertions garantissent qu'il reste
+# quelque chose à détecter.
+#
+# "tour" vaut TOURS+1 (dump-tour-N.txt est capturé après le newRound du tour
+# N, et le premier newRound d'inscription fait déjà passer le compteur de 0
+# à 1).
+tour = 6
+commandant.1.nom = Chef
+commandant.2.nom = Membre
+commandant.3.nom = Banni
+commandant.1.humain = true
+commandant.2.humain = true
+commandant.3.humain = true
+#
+# Effet de jeu : exclure_alliance (turn-5.sql) fait passer l'alliance de 3 à
+# 2 membres, Banni (3) écarté. Le plan initial lisait la colonne VOTE de
+# exclure_alliance comme un booléen ("1 = exclusion") : c'est faux, vérifié
+# à l'exploration (voir turn-5.sql). VOTE porte le numéro du commandant visé.
+# Vue rouge sur une variante sans turn-5.sql (ou avec la mauvaise lecture de
+# VOTE) : alliance.0.membres resterait "1,2,3", ou perdrait le mauvais
+# membre.
+alliance.0.membres = 1,2
+alliance.0.dirigeant = 2

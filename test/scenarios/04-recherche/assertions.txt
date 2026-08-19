@@ -1,0 +1,16 @@
+# Le golden détecte le changement, ces assertions garantissent qu'il reste
+# quelque chose à détecter.
+#
+# "tour" vaut TOURS+1 (dump-tour-N.txt est capturé après le newRound du tour
+# N, et le premier newRound d'inscription fait déjà passer le compteur de 0
+# à 1).
+tour = 3
+commandant.1.nom = Savant
+commandant.1.humain = true
+#
+# Effet de jeu, persistance de l'acquisition : progcoI reste connue au tour
+# 2, un tour après son acquisition, sans jamais devenir publique (voir
+# scenario.properties pour le mécanisme qui l'en empêche structurellement).
+# Vue rouge sur une variante sans turn-1.sql : commandant.1.technologies
+# resterait "missI" seul.
+commandant.1.technologies = missI,progcoI
