@@ -74,7 +74,11 @@ public class Const {
 
             String seedProp = properties.getProperty("RANDOM_SEED");
             if (seedProp != null && !seedProp.trim().isEmpty()) {
-              RANDOM_SEED = Long.valueOf(seedProp.trim());
+              try {
+                RANDOM_SEED = Long.valueOf(seedProp.trim());
+              } catch (NumberFormatException e) {
+                System.out.println("RANDOM_SEED invalide dans config.properties (" + seedProp.trim() + "), hasard non semé");
+              }
             }
 
         } catch (IOException e) {
