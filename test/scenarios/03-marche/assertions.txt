@@ -1,0 +1,15 @@
+tour = 4
+commandant.1.nom = Vendeur1
+commandant.2.nom = Vendeur2
+commandant.3.nom = Acheteur
+
+# Effet de jeu observable : les deux encheres ont ete reglees. La
+# marchandise a change de mains (l'acheteur, qui n'en detenait aucune unite
+# au tour 2, en detient 2 dans sa capitale) et les centaures ont bouge dans
+# les deux sens (debit chez l'acheteur, credit chez les deux vendeurs).
+# Verifie rouge sur une variante sans ordre d'achat au tour 3 (les 4 lignes
+# ci-dessous echouent alors toutes) : cf. rapport de tache.
+commandant.3.possession.0_32_5.marchandise.7 = 48/2
+commandant.1.centaures = 21929.33
+commandant.2.centaures = 22166.00
+commandant.3.centaures = 21354.80

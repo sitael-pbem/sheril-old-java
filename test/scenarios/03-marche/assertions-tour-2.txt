@@ -1,0 +1,12 @@
+# Verrouille l'etat intermediaire : les deux offres existent AVANT que les
+# encheres ne soient posees (tour 3). Necessaire car un echec de reglement
+# sortirait en evenement, pas en erreur moteur (cf. tache 7) : sans cette
+# assertion de tour intermediaire, une offre absente passerait inapercue.
+offre.1.vendeur = 1
+offre.1.origine = 0_13_6
+offre.1.code = 7
+offre.1.quantite = 1
+offre.2.vendeur = 2
+offre.2.origine = 0_34_27
+offre.2.code = 7
+offre.2.quantite = 1
