@@ -14,6 +14,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Aucun job n'écrit sur le dépôt, n'ouvre de PR ni ne pose de statut au-delà
+# de ce que le runner fait lui-même : contents: read suffit, pas besoin des
+# permissions par défaut du token (écriture incluse) que GitHub accorderait
+# sinon.
+permissions:
+  contents: read
+
 env:
   # Le harnais tourne nu en intégration continue, sans docker compose : ces
   # deux variables (lues par test/harness/lib.sh) remplacent leurs valeurs
@@ -24,6 +31,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      scenarios: ${{ steps.lister.outputs.scenarios }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -45,26 +55,47 @@ jobs:
           jar tf sheril.jar | grep -qx 'Start.class'
           jar tf sheril.jar | grep -qx 'zIgzAg/jeu/oceane/DumpEtat.class'
           echo "jar contrôlé : Start.class et DumpEtat.class présents"
+      - name: Lister les scénarios
+        id: lister
+        # Dérive la liste des scénarios de test/scenarios/ au lieu de la
+        # coder en dur dans les jobs matrixés dessus ("scenarios" et
+        # "determinisme-scenarios") : un scénario ajouté sous
+        # test/scenarios/ apparaît automatiquement dans les deux matrices.
+        # Avec une liste figée à deux endroits, un scénario oublié dans l'une
+        # des deux, ou dans les deux, resterait silencieusement absent,
+        # jamais joué, sans faire échouer le workflow.
+        run: |
+          set -euo pipefail
+          scenarios=$(find test/scenarios -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+          echo "scénarios découverts:"
+          echo "$scenarios"
+          json=$(printf '%s\n' "$scenarios" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "scenarios=$json" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: sheril-jar
           path: sheril.jar
           retention-days: 1
+          if-no-files-found: error
 
   scenarios:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        scenario:
-          - 01-combat
-          - 02-colonisation
-          - 03-marche
-          - 04-recherche
-          - 05-alliances
+        scenario: ${{ fromJson(needs.build.outputs.scenarios) }}
     services:
-      db:
+      # Image mysql:5 conservée telle quelle : pas d'équivalent Chainguard
+      # pour un serveur MySQL. Le choix de la version (5, pas 8, pas une
+      # image cgr.dev/chainguard/mysql qui n'existe pas) suit
+      # docker-compose.yml, utilisé pour le développement local du harnais :
+      # faire diverger la version du serveur entre le poste de développement
+      # et l'intégration continue rendrait les goldens suspects, un ordre ou
+      # un dump pourrait se comporter différemment pour une raison qui n'a
+      # rien à voir avec le moteur testé.
+      db: &mysql-service
         image: mysql:5
         env:
           MYSQL_DATABASE: sheril
@@ -94,6 +125,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dump-${{ matrix.scenario }}
+          if-no-files-found: error
           path: |
             test/work/${{ matrix.scenario }}/dump-tour-*.txt
             test/work/${{ matrix.scenario }}/diff-tour-*.txt
@@ -104,19 +136,9 @@ jobs:
   determinisme:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
-      db:
-        image: mysql:5
-        env:
-          MYSQL_DATABASE: sheril
-          MYSQL_USER: user
-          MYSQL_PASSWORD: password
-          MYSQL_ROOT_PASSWORD: password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -ppassword" --health-interval=5s
-          --health-timeout=5s --health-retries=20
+      db: *mysql-service
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -145,40 +167,74 @@ jobs:
       - name: Contrôle minimal de Start dumpState
         run: ./test/harness/check-dumpstate.sh
       - name: Déterminisme de l'initialisation
+        # if: always() sur ce step et les deux suivants : sans ça, le
+        # premier des quatre contrôles à échouer masque les autres (le job
+        # s'arrête), alors qu'ils sont indépendants et que le tableau complet
+        # aide au diagnostic. Le verdict du job n'en est pas changé : il
+        # reste en échec dès qu'un des quatre l'est.
+        if: always()
         run: ./test/harness/check-init-determinisme.sh
       - name: Déterminisme de la description des composants
+        if: always()
         run: ./test/harness/check-composants-determinisme.sh
       - name: DATE_FIGEE respectée par Utile.getDateRapport
+        if: always()
         run: ./test/harness/check-date-figee.sh
-      - name: Déterminisme d'un tour joué, sur chacun des cinq scénarios
-        # check-determinisme.sh recharge lui-même le schéma (via
-        # run-scenario.sh --workdir, appelé deux fois) : la boucle n'a pas
-        # besoin de l'étape "Charger le schéma" ci-dessus, qui ne sert qu'aux
-        # quatre contrôles précédents. Accumulation des échecs plutôt
-        # qu'arrêt au premier scénario non déterministe (l'échec d'une
-        # commande dans la condition d'un "if" n'active pas le "set -e" du
-        # step) : les cinq scénarios sont exercés même si l'un d'eux échoue.
-        run: |
-          set -euo pipefail
-          echecs=0
-          for scenario in 01-combat 02-colonisation 03-marche 04-recherche 05-alliances; do
-            echo "== déterminisme : $scenario"
-            if ! ./test/harness/check-determinisme.sh "$scenario"; then
-              echo "ECHEC déterminisme: $scenario" >&2
-              echecs=$((echecs+1))
-            fi
-          done
-          test "$echecs" -eq 0
       - name: Publier les diffs en cas d'échec
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: determinisme-diffs
+          if-no-files-found: error
           path: |
             test/work/*diff*.txt
             test/work/*/dump.txt
             test/work/init-diff.txt
             test/work/composants/diff.txt
+          retention-days: 7
+
+  determinisme-scenarios:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJson(needs.build.outputs.scenarios) }}
+    services:
+      db: *mysql-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Déterminisme d'un tour joué
+        # check-determinisme.sh recharge lui-même le schéma (via
+        # run-scenario.sh --workdir, appelé deux fois) : ce job n'a pas
+        # besoin d'un step "Charger le schéma".
+        #
+        # Un job par scénario, chacun sur son propre runner et sa propre base
+        # de service : contrairement à une boucle dans un seul job,
+        # check-determinisme.sh écrase test/work/det-a, test/work/det-b et
+        # les det-diff-<n>.txt à chaque appel (mêmes noms de fichiers,
+        # indépendants du scénario), et ne laisserait donc que les artefacts
+        # du DERNIER scénario joué, désignant la mauvaise cause si un
+        # scénario antérieur avait échoué ou s'était arrêté durement.
+        run: ./test/harness/check-determinisme.sh ${{ matrix.scenario }}
+      - name: Publier les diffs en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinisme-diffs-${{ matrix.scenario }}
+          if-no-files-found: error
+          path: |
+            test/work/det-diff-*.txt
             test/work/det-a.log
             test/work/det-b.log
           retention-days: 7
@@ -186,19 +242,9 @@ jobs:
   rapports:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
-      db:
-        image: mysql:5
-        env:
-          MYSQL_DATABASE: sheril
-          MYSQL_USER: user
-          MYSQL_PASSWORD: password
-          MYSQL_ROOT_PASSWORD: password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -ppassword" --health-interval=5s
-          --health-timeout=5s --health-retries=20
+      db: *mysql-service
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -221,16 +267,22 @@ jobs:
         # figé (ex. tour3/rapports) resterait présent après un ajustement du
         # nombre de tours du scénario et ferait passer ce contrôle sur un
         # répertoire qui existe mais ne porte plus le dernier tour joué,
-        # rendant l'échec silencieux. run-scenario.sh contrôle déjà que
-        # chaque XML est non vide et bien formé ; ce step ajoute le décompte
-        # par commandant humain, la seule chose que le script ne peut pas
-        # savoir sans connaître le scénario.
+        # rendant l'échec silencieux.
+        #
+        # Le nombre attendu de rapports est lui aussi dérivé, du nombre
+        # d'INSERT INTO aa_inscription dans setup.sql (deux commandants
+        # humains aujourd'hui), et comparé avec -eq, pas -ge : un troisième
+        # joueur ajouté à setup.sql sans qu'un rapport ne soit produit pour
+        # lui resterait invisible à un seuil minimal, alors qu'un décompte
+        # exact le détecte.
         run: |
           set -euo pipefail
           source test/harness/lib.sh
           tours="$(propriete test/scenarios/02-colonisation/scenario.properties TOURS)"
           dernier_tour_rapports="test/work/02-colonisation/data/tour$((tours+1))/rapports"
+          nb_attendu=$(grep -c '^INSERT INTO aa_inscription' test/scenarios/02-colonisation/setup.sql)
           echo "dernier tour joué: $tours, rapports attendus dans $dernier_tour_rapports"
+          echo "commandants humains attendus (setup.sql): $nb_attendu"
           nb_xml=$(find "$dernier_tour_rapports" -name '*.xml' | wc -l)
           echo "rapports XML: $nb_xml"
-          test "$nb_xml" -ge 2
+          test "$nb_xml" -eq "$nb_attendu"
