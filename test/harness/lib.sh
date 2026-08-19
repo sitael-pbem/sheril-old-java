@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 # Fonctions communes aux scripts du harnais.
 # Aucune de ces fonctions ne connaît le contenu d'un scénario.
+#
+# PIÈGE À CONNAÎTRE (ronde de correction 1, SHRL-46) : dans les tables
+# d'ordres qui portent une position (deplacer_flotte, changer_capitale...),
+# la colonne POSX alimente en réalité la composante Y de la Position
+# construite côté moteur, et POSY alimente la composante X. C'est
+# ReceptionOrdres.deplacer_flotte qui construit
+# "new Position(GALAXIE, POSX, POSY)", et le constructeur Position(gala, y, x)
+# range son premier argument de position dans pos[0] (= Y). Le dump, lui,
+# rend une position sous la forme g_y_x (Position.toString()). Pour viser une
+# position lue "g_Y_X" dans un dump, écrire POSX = Y et POSY = X dans
+# l'ordre SQL, jamais POSX = X. Vécu sur 01-combat : une flotte envoyée avec
+# POSX = @CAPX(...)@ / POSY = @CAPY(...)@ atterrit sur une position qui n'existe
+# pas, silencieusement (aucun système à cet endroit, aucun combat).
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MYSQL_CLI="${MYSQL_CLI:-docker compose exec -T db mysql}"

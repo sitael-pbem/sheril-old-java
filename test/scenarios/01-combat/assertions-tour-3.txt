@@ -1,0 +1,9 @@
+# Effet de la stratégie créée au tour 2 (turn-2.sql), utilisable par le
+# deplacer_flotte de ce tour : la flotte 0 d'Alpha porte désormais la
+# stratégie "Assaut" au lieu de la stratégie par défaut "{0}". Si le
+# marqueur ou le nom de stratégie ne se résolvait plus, ou si la contrainte
+# d'ordre entre creer_strategie et deplacer_flotte (voir turn-2.sql,
+# turn-3.sql) redevenait franchissable dans un même tour d'une façon qui
+# casse ce scénario, cette ligne serait fausse.
+tour = 4
+commandant.1.flotte.0.strategie = Assaut

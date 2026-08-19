@@ -1,0 +1,6 @@
+# Effet de la recherche affectée en turn-1.sql : "stratcoI" est acquise en
+# fin de tour 1 (Commandant.resolutionProgressionRecherche). Sans le
+# modifier_budget qui alloue le budget technologique (voir turn-1.sql),
+# cette ligne resterait "commandant.1.technologies = metauxII,scanI".
+tour = 2
+commandant.1.technologies = metauxII,scanI,stratcoI

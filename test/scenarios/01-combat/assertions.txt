@@ -5,21 +5,27 @@
 # "tour" vaut TOURS+1 : dump-tour-N.txt est capturé après le newRound du
 # tour N, et le premier newRound (inscription, avant la boucle des tours)
 # fait déjà passer le compteur interne de 0 à 1.
-tour = 3
+tour = 7
 commandant.1.nom = Alpha
 commandant.2.nom = Beta
 commandant.1.humain = true
 commandant.2.humain = true
 #
-# Effet de jeu : la puissance de la flotte 0 d'Alpha après le combat contre
-# Beta. Un simple décompte de vaisseaux ne suffit pas ici : la flotte perd
-# des vaisseaux à chaque tour même sans ordre ni combat (attrition de fond,
-# vérifié en rejouant le scénario sans l'ordre deplacer_flotte : 73 -> 69 ->
-# 66 dans les deux cas), donc un nombre de vaisseaux identique au tour 2 ne
-# distingue pas un combat réel d'un scénario dégénéré. La puissance, elle,
-# encaisse les dégâts du combat : rejoué sans l'ordre de mouvement (flotte
-# restée à sa capitale, aucun affrontement), elle vaut 1086 ; avec le combat
-# contre Beta, elle vaut 1054. Cette ligne serait donc fausse si le marqueur
-# de mouvement ne se résolvait plus, si la directive d'attaque cessait
-# d'être honorée, ou si le combat ne se déclenchait plus.
-commandant.1.flotte.0.puissance = 1054
+# Effet de jeu : la puissance de la flotte 0 de BETA (le défenseur) après le
+# combat du tour 5. Pas le nombre de ses vaisseaux : dix par tour1-4, un
+# combat réel ne fait tomber ce nombre qu'à 3 (perte massive), une valeur
+# trop dépendante du tirage pour rester un bon témoin structurel. La
+# puissance, elle, encaisse tout dégât, même partiel : 250 avant combat,
+# 75 après, stable ensuite (le combat ne se rejoue pas une fois la
+# directive consommée). Cette ligne serait fausse si :
+# - le marqueur de mouvement ne se résolvait plus ou pointait ailleurs
+#   (piège de colonnes POSX/POSY, voir l'en-tête de test/harness/lib.sh) ;
+# - la directive d'attaque ciblée sur Beta (8 + 100 * numéro, voir
+#   turn-3.sql) redevenait une DIRECTIVE_FLOTTE_ATTAQUE_TOUTE_FLOTTES : dans
+#   ce cas la flotte d'Alpha engage la garnison neutre du système (toujours
+#   présente à la capitale d'un commandant) et jamais Beta, dont les 8
+#   lignes de flotte restent alors identiques d'un tour à l'autre, y compris
+#   cette ligne (vu rouge : puissance restée à 250 dans cette configuration,
+#   confirmé en rejouant ce scénario avec DIRECTIVE = 3 avant cette
+#   correction).
+commandant.2.flotte.0.puissance = 75
