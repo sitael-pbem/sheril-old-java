@@ -167,10 +167,12 @@ git diff test/scenarios/01-combat/golden/
 
 Les assertions restent vérifiées pendant la régénération, un scénario cassé ne
 peut donc pas voir ses références bénies en silence. Le diff est à relire avant
-de committer, et il est large : mesuré sur les goldens versionnés, un tour fait
-bouger 324 à 334 lignes de dump quand le joueur donne des ordres, et **174 lignes
-quand il n'en donne aucun**, par la seule croissance de fond de la population et
-du minerai. Ce sont les assertions, pas le golden, qui portent l'intention.
+de committer, et il est large. Mesuré sur les cinq jeux de goldens versionnés,
+un tour fait bouger **317 à 485 lignes** de dump quand le joueur donne des
+ordres, l'amplitude venant du scénario (317 à 325 pour `02-colonisation`, 476 à
+485 pour `05-alliances`). Et **174 lignes quand il n'en donne aucun**, par la
+seule croissance de fond de la population et du minerai. Ce sont les assertions,
+pas le golden, qui portent l'intention.
 
 ### contrôler que le moteur rejoue à l'identique
 

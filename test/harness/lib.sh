@@ -65,12 +65,13 @@
 #   - aa_vaisseaux.VAISSEAU est un indice de 1 à 5 dans une table de quotas
 #     nommés, pas un numéro de plan de vaisseau, et la table REMPLACE la flotte
 #     au lieu de s'y ajouter : dès que la map est non vide, tous les quotas sont
-#     remis à zéro (Flotte.java:280) avant d'appliquer les indices présents.
+#     remis à zéro (Flotte.java:280-281) avant d'appliquer les indices présents.
 #     Conséquence plus dure qu'un simple « ignoré » : une ligne unique hors de
 #     1..5 donne une flotte VIDE, sans erreur. Et la PREMIÈRE ligne de la table
 #     n'est jamais lue, r2.first() plaçant déjà le curseur sur elle avant que
-#     while (r2.next()) ne la saute (ProductionOrdres.java:493-495) : le premier
-#     commandant inscrit garde la flotte par défaut. Bug moteur, suivi en
+#     while (r2.next()) ne la saute (ProductionOrdres.java:493-495) : le
+#     propriétaire de cette première ligne garde la flotte par défaut, quel que
+#     soit son rang dans aa_inscription. Bug moteur, suivi en
 #     SHRL-54 (Flotte.choixFlotteDeDepart, Flotte.java:257-306) ;
 #   - le dump écrit marchandise.<code> = <PRIX>/<QUANTITE> (cf. piège plus bas).
 # Règle qui en découle : tout scénario doit porter au moins une assertion sur
