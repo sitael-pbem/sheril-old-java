@@ -9,8 +9,10 @@ commandant.1.nom = Savant
 commandant.1.humain = true
 #
 # Effet de jeu, persistance de l'acquisition : progcoI reste connue au tour
-# 2, un tour après son acquisition, sans jamais devenir publique (voir
-# scenario.properties pour le mécanisme qui l'en empêche structurellement).
-# Vue rouge sur une variante sans turn-1.sql : commandant.1.technologies
-# resterait "missI" seul.
+# 2, un tour après son acquisition, sans jamais devenir publique (bug
+# documenté dans scenario.properties). Cette même ligne verrouille aussi la
+# persistance du passage d'infoII au domaine public au tour 1 (assertion
+# nommée dans assertions-tour-1.txt, vue rouge vérifiée sur une variante à
+# deux commandants humains). Vue rouge sur une variante sans turn-1.sql :
+# commandant.1.technologies resterait "missI" seul.
 commandant.1.technologies = missI,progcoI

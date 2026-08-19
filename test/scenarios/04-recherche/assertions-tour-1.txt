@@ -6,5 +6,22 @@
 # sans le modifier_budget et l'affecter_recherche de turn-1.sql, cette ligne
 # resterait "commandant.1.technologies = missI" (vérifié : la variante sans
 # turn-1.sql fait échouer cette assertion).
+#
+# ASSERTION NOMMÉE, second effet verrouillé par la même ligne : le passage
+# d'infoII au domaine public. verifier_assertions compare la ligne entière
+# (grep -qxF, run-scenario.sh:68), donc cette assertion échouerait tout
+# autant si infoII restait connue (la ligne porterait
+# "infoII,missI,progcoI"). Avec Savant seul comme commandant humain, le
+# seuil de Technologie.testDevenirTechnologiesPubliques
+# ("nb > (c.length*60)/100", Technologie.java:292) vaut "1 > 0" dès qu'il
+# connaît une technologie non filtrée par le bug documenté dans
+# scenario.properties : infoII (technologie initiale de la race 3, corps
+# "info" < "maitr0_", non filtrée) bascule donc au domaine public dès le
+# tour 1, indépendamment de tout ordre de ce scénario.
+# Vue rouge vérifiée par exécution : avec un second commandant humain d'une
+# autre race (donc sans infoII), le seuil devient "nb > 1", et Savant seul
+# à connaître infoII ne suffit plus (1 > 1 faux) : infoII reste dans la
+# liste, "commandant.1.technologies = infoII,missI,progcoI", et cette
+# assertion échoue. Variante testée puis supprimée, non committée.
 tour = 2
 commandant.1.technologies = missI,progcoI
