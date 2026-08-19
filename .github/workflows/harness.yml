@@ -304,3 +304,103 @@ jobs:
           nb_xml=$(find "$dernier_tour_rapports" -name '*.xml' | wc -l)
           echo "rapports XML: $nb_xml"
           test "$nb_xml" -eq "$nb_attendu"
+
+  captures:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Non négociable : une capture visuelle qui échoue (Chrome absent ou
+    # instable sur le runner, page HTML récalcitrante) ne doit jamais faire
+    # tomber le golden. Mais continue-on-error ne dispense pas ce job de DIRE
+    # ce qu'il a produit : voir le step "Capturer les rapports et compter la
+    # production" plus bas, dont la garde de non-vacuité rend explicitement
+    # visible (log + résumé du run) un job qui n'a rendu aucune page, plutôt
+    # que de laisser continue-on-error avaler l'écart en silence. Motif déjà
+    # rencontré cinq fois dans ce chantier (SHRL-46) : un job ou une boucle
+    # verte sans avoir rien exercé.
+    continue-on-error: true
+    services:
+      db: *mysql-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Vérifier la présence d'un Chrome
+        run: |
+          set -euo pipefail
+          if command -v google-chrome || command -v chromium-browser || command -v chromium; then
+            echo "Chrome déjà présent sur le runner"
+          else
+            echo "Aucun Chrome, installation de chromium-browser"
+            sudo apt-get install -y chromium-browser
+          fi
+      - name: Jouer 02-colonisation
+        run: ./test/harness/run-scenario.sh 02-colonisation
+      - name: Capturer les rapports et compter la production réelle
+        # Le chemin du dernier tour joué se dérive de TOURS
+        # (scenario.properties), exactement comme le job "rapports"
+        # ci-dessus : TOURS = 8 aujourd'hui donne data/tour9/rapports, pas le
+        # data/tour3/rapports d'une version antérieure du scénario (qui
+        # existe toujours sur disque, avec du XML dedans, et capturerait
+        # silencieusement un tour où il ne se passe plus rien si le chemin
+        # restait codé en dur).
+        #
+        # Garde de non-vacuité (même motif que run-scenario.sh, check-
+        # composants-determinisme.sh, et le step "Lister les scénarios" du
+        # job "build") : le compte réel de PNG produits est la seule preuve
+        # que ce job a rendu quelque chose. continue-on-error (job) absorbe
+        # un échec de rendu partiel (statut_script != 0 mais des pages sont
+        # quand même sorties), mais zéro PNG produit est traité comme un
+        # échec net et explicite de ce step, pour rester visible dans les
+        # logs et le résumé du run malgré continue-on-error.
+        run: |
+          set -euo pipefail
+          source test/harness/lib.sh
+          tours="$(propriete test/scenarios/02-colonisation/scenario.properties TOURS)"
+          dernier_tour_rapports="test/work/02-colonisation/data/tour$((tours+1))/rapports"
+          echo "dernier tour joué: $tours, rapports capturés depuis $dernier_tour_rapports"
+
+          mkdir -p capture-rapports
+          statut_script=0
+          python3 scripts/capture-rapports.py "$dernier_tour_rapports" -o capture-rapports || statut_script=$?
+          # -size +0c, pas un simple -name : le script lui-même (capturer(),
+          # ok_png = png.exists() and png.stat().st_size > 0) traite un PNG
+          # de taille nulle comme un échec de rendu. Compter les fichiers par
+          # seule présence compterait comme "capture produite" un rendu qui a
+          # simplement laissé un fichier vide derrière lui (Chrome instable,
+          # page qui plante), rouvrant exactement le trou que cette garde
+          # existe pour fermer.
+          nb_png=$(/usr/bin/find capture-rapports -name '*.png' -size +0c | wc -l)
+          nb_pdf=$(/usr/bin/find capture-rapports -name '*.pdf' -size +0c | wc -l)
+
+          echo "script de capture : code retour $statut_script"
+          echo "pages produites : $nb_png PNG, $nb_pdf PDF"
+          {
+            echo "### Captures visuelles (02-colonisation, tour $tours)"
+            echo "- script de capture : code retour $statut_script"
+            echo "- pages produites : $nb_png PNG, $nb_pdf PDF"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$nb_png" -eq 0 ]; then
+            echo "::error::aucune capture produite (0 PNG) : ce job n'a rendu aucune page. Ce serait exactement le défaut « vert sans avoir rien exercé » déjà rencontré ailleurs dans ce chantier (SHRL-46)." >&2
+            exit 1
+          fi
+          if [ "$statut_script" -ne 0 ]; then
+            echo "::warning::le script de capture est sorti en $statut_script ($nb_png PNG produits malgré tout) : certaines pages n'ont pas pu être rendues, voir les logs ci-dessus." >&2
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: captures-rapports
+          path: |
+            capture-rapports/**/*.png
+            capture-rapports/**/*.pdf
+            capture-rapports/index.html
+          if-no-files-found: error
+          retention-days: 14
