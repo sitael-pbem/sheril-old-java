@@ -1,0 +1,8 @@
+# Effet de la recherche affectée en turn-1.sql : "raffineI" est acquise en
+# fin de tour 2 (Commandant.resolutionProgressionRecherche, coût 100 points
+# * Const.MODIFICATEUR_DIFFICULTE_RECHERCHE = 400 points effectifs, atteints
+# sur deux tours à ce niveau de revenu). Sans le modifier_budget qui alloue
+# le budget technologique (voir turn-1.sql), cette ligne resterait
+# "commandant.1.technologies = metauxII,scanI".
+tour = 3
+commandant.1.technologies = metauxII,raffineI,scanI

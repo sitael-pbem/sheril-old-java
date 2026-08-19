@@ -1,0 +1,29 @@
+# Le golden détecte le changement, ces assertions garantissent qu'il reste
+# quelque chose à détecter. Chaque ligne non vide et non commentée doit
+# apparaître telle quelle dans le dump du dernier tour.
+#
+# "tour" vaut TOURS+1 : dump-tour-N.txt est capturé après le newRound du
+# tour N, et le premier newRound (inscription, avant la boucle des tours)
+# fait déjà passer le compteur interne de 0 à 1.
+tour = 9
+commandant.1.nom = Colon
+commandant.2.nom = Temoin
+commandant.1.humain = true
+commandant.2.humain = true
+#
+# Effet de jeu : la planète 0 du système capital de Colon ("Yo 1"), colonisée
+# au tour 6 (turn-6.sql) puis retaxée deux fois (turn-7.sql, turn-8.sql).
+# coloniserPlanetes n'exige pas que la cible soit inhabitée (Commandant.java
+# :3592, estProprio seulement) : toutes les planètes du système capital étant
+# déjà à Colon dès sa création, la seule cible atteignable ici est déjà
+# habitée (par la race 1, la plus nombreuse du système). L'ordre déclenche
+# donc une éradication (population remise à zéro, réputation -300,
+# stabilité -10, Commandant.java:3608-3621) suivie d'une recolonisation par
+# l'équipage du Colonisateur (la race majoritaire du système,
+# Possession.java:559, ici la race 1 aussi : la recolonisation réussit
+# à coup sûr). Trois lignes discriminantes, vérifiées rouge sur une variante
+# sans turn-6.sql (population.1 = 790, stabilite = 100, sans la chute que
+# provoque l'éradication) :
+systeme.0_10_17.planete.0.taxation = 0
+systeme.0_10_17.planete.0.stabilite = 94
+systeme.0_10_17.planete.0.population.1 = 229

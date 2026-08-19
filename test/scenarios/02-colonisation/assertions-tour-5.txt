@@ -1,0 +1,10 @@
+# Garantit que le Colonisateur mis en chantier au tour 5 (turn-5.sql) existe
+# réellement avant d'être employé au tour 6 (turn-6.sql, utiliser_colonisateur).
+# Sans cette assertion intermédiaire, un Colonisateur qui ne sortirait plus du
+# chantier (faute d'unité energétique, cf. turn-1.sql à turn-4.sql) ferait
+# silencieusement échouer utiliser_colonisateur au tour 6 sans qu'aucune ligne
+# de assertions.txt ne le révèle nécessairement, la colonisation ratée
+# pouvant elle aussi produire des lignes de dump différentes du golden mais
+# pas forcément une valeur qui coïncide avec une assertion mal choisie.
+tour = 6
+commandant.1.flotte.0.vaisseau.Colonisateur = 1
