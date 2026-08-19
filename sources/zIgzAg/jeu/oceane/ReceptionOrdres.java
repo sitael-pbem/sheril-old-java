@@ -275,12 +275,18 @@ public class ReceptionOrdres {
 				liste.sort(Comparator.comparingDouble(Enchere::montant).reversed())
 		);
 
-		// OffreMarche n'override pas hashCode : la clé est hachée par identité
-		// mémoire et l'ordre de entrySet() change d'une exécution de JVM à
-		// l'autre. Chaque offre réglée débitant les centaures de l'acheteur,
-		// un commandant qui enchérit sur deux offres sans avoir les moyens des
-		// deux remportait l'une ou l'autre selon l'ordre. On règle donc les
-		// offres dans l'ordre croissant de leur identifiant, qui est stable.
+		// OffreMarche n'override pas hashCode ni equals (OffreMarche.java:5) :
+		// la clé est hachée par identité mémoire et l'ordre de entrySet()
+		// n'est pas garanti stable d'une JVM à l'autre. Chaque règlement
+		// ajoute un événement EV_COMMANDANT_ACHAT_GALACTIQUE_0000 à
+		// l'acheteur (Commandant.java:4146), rangé par Commentaire dans une
+		// ArrayList en ordre d'insertion (Commentaire.java:17-42) : un
+		// acheteur qui remporte plusieurs offres le même tour voit donc
+		// l'ordre de ces messages dans son rapport varier avec l'ordre de
+		// entrySet(), sans que rien côté état du jeu (centaures, stocks) n'en
+		// dépende avec la logique de règlement actuelle. On règle donc les
+		// offres dans l'ordre croissant de leur identifiant, qui est stable,
+		// pour rendre aussi cet ordre de rapport déterministe.
 		List<Map.Entry<OffreMarche, List<Enchere>>> offresTriees =
 				new ArrayList<>(encheresMarche.entrySet());
 		offresTriees.sort(Comparator.comparingInt(e -> e.getKey().getId()));
