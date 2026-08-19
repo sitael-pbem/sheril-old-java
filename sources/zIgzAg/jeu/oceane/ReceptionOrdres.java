@@ -275,8 +275,18 @@ public class ReceptionOrdres {
 				liste.sort(Comparator.comparingDouble(Enchere::montant).reversed())
 		);
 
+		// OffreMarche n'override pas hashCode : la clé est hachée par identité
+		// mémoire et l'ordre de entrySet() change d'une exécution de JVM à
+		// l'autre. Chaque offre réglée débitant les centaures de l'acheteur,
+		// un commandant qui enchérit sur deux offres sans avoir les moyens des
+		// deux remportait l'une ou l'autre selon l'ordre. On règle donc les
+		// offres dans l'ordre croissant de leur identifiant, qui est stable.
+		List<Map.Entry<OffreMarche, List<Enchere>>> offresTriees =
+				new ArrayList<>(encheresMarche.entrySet());
+		offresTriees.sort(Comparator.comparingInt(e -> e.getKey().getId()));
+
 		// maintenant on regarde pour chaque offre
-		for (Map.Entry<OffreMarche, List<Enchere>> entry : encheresMarche.entrySet()) {
+		for (Map.Entry<OffreMarche, List<Enchere>> entry : offresTriees) {
 			OffreMarche offre = entry.getKey();
 			List<Enchere> encheresTriees = entry.getValue();
 			// on sort si aucune enchère
