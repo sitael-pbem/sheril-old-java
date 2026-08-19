@@ -13,12 +13,18 @@ appel() {
 }
 
 sed 's|^NOTIFY_BOT.*|NOTIFY_BOT = false|' "$REPO/config.properties.sample" > "$WORK/config.properties"
-sans=$(appel)
+# || true sur les deux appels : appel() se termine par un grep de forme, et
+# sous set -e -o pipefail un grep sans correspondance fait avorter le script
+# AVANT le test qui suit, donc sans jamais afficher son message ECHEC. Le
+# contrôle échouait alors sur une sortie muette, en désignant la mauvaise
+# cause. Neutraliser le code de retour ici rend la main au test, qui affiche
+# la valeur obtenue (vide) et ce qui était attendu.
+sans=$(appel || true)
 attendu_sans=$(date +%d/%m/%Y)
 test "$sans" = "$attendu_sans" || { echo "ECHEC: sans DATE_FIGEE, obtenu '$sans', attendu '$attendu_sans'"; exit 1; }
 
 printf '\nDATE_FIGEE = 01/01/2000\n' >> "$WORK/config.properties"
-avec=$(appel)
+avec=$(appel || true)
 test "$avec" = "01/01/2000" || { echo "ECHEC: avec DATE_FIGEE, obtenu '$avec', attendu '01/01/2000'"; exit 1; }
 
 echo "OK: DATE_FIGEE respectée, et absente le comportement est inchangé"

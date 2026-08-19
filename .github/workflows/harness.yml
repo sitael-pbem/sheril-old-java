@@ -388,12 +388,17 @@ jobs:
             echo "- pages produites : $nb_png PNG, $nb_pdf PDF"
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # Les commandes de workflow (::error::, ::warning::) sont lues sur la
+          # SORTIE STANDARD, pas sur stderr. Les router vers stderr les
+          # réduisait à des lignes de journal ordinaires. Ce job portant
+          # continue-on-error, l'annotation est le seul signal qui remonte
+          # visiblement quand il n'a rendu aucune page.
           if [ "$nb_png" -eq 0 ]; then
-            echo "::error::aucune capture produite (0 PNG) : ce job n'a rendu aucune page. Ce serait exactement le défaut « vert sans avoir rien exercé » déjà rencontré ailleurs dans ce chantier (SHRL-46)." >&2
+            echo "::error::aucune capture produite (0 PNG) : ce job n'a rendu aucune page. Ce serait exactement le défaut « vert sans avoir rien exercé » déjà rencontré ailleurs dans ce chantier (SHRL-46)."
             exit 1
           fi
           if [ "$statut_script" -ne 0 ]; then
-            echo "::warning::le script de capture est sorti en $statut_script ($nb_png PNG produits malgré tout) : certaines pages n'ont pas pu être rendues, voir les logs ci-dessus." >&2
+            echo "::warning::le script de capture est sorti en $statut_script ($nb_png PNG produits malgré tout) : certaines pages n'ont pas pu être rendues, voir les logs ci-dessus."
           fi
       - uses: actions/upload-artifact@v4
         with:

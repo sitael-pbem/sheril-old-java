@@ -70,6 +70,12 @@ def resoudre(valeurs, genre, args):
     if genre == "FLOTTE":
         rang = int(parts[1])
         numeros = rangs(valeurs, "commandant.%s.flotte" % num, "position")
+        # Le rang negatif est refuse explicitement : Python le resoudrait par
+        # l'arriere (-1 = derniere flotte), donc @FLOTTE(Alpha,-1)@ rendrait une
+        # valeur plausible au lieu d'echouer, et le scenario viserait une flotte
+        # que son auteur n'a pas designee.
+        if rang < 0:
+            raise KeyError("rang de flotte negatif (%d) pour le commandant %r" % (rang, nom))
         if rang >= len(numeros):
             raise KeyError("le commandant %r n'a que %d flotte(s)" % (nom, len(numeros)))
         return str(numeros[rang])
@@ -80,6 +86,8 @@ def resoudre(valeurs, genre, args):
             if cle.startswith("offre.") and cle.endswith(".vendeur") and valeur == num
         )
         rang = int(parts[1])
+        if rang < 0:
+            raise KeyError("rang d'offre negatif (%d) pour le commandant %r" % (rang, nom))
         if rang >= len(ids):
             raise KeyError("le commandant %r n'a que %d offre(s)" % (nom, len(ids)))
         return str(ids[rang])

@@ -13,7 +13,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 WORK="$REPO/test/work/dumpstate"
 
 preparer_workdir "$WORK" "" ""
-moteur "$WORK" init > "$WORK/init.log" 2>&1
+# Le journal d'init est restitué en cas d'échec, sans quoi un init qui casse
+# fait échouer le contrôle deux lignes plus bas, sur « dump.txt vide », ce qui
+# désigne dumpState alors que la faute est en amont.
+moteur "$WORK" init > "$WORK/init.log" 2>&1 \
+  || { echo "ECHEC: Start init a échoué, journal ci-dessous"; cat "$WORK/init.log"; exit 1; }
 moteur "$WORK" dumpState "$WORK/dump.txt"
 
 test -s "$WORK/dump.txt" || { echo "ECHEC: dump.txt vide ou absent"; exit 1; }
@@ -32,4 +36,23 @@ if grep -vE '^[^=]+ = ' "$WORK/dump.txt" | grep -q .; then
   exit 1
 fi
 
-echo "OK: $(wc -l < "$WORK/dump.txt") lignes"
+# Le mode --complet est la porte de sortie de diagnostic du dump : il détaille
+# les planètes et les possessions que le mode normal résume. Il n'est exercé
+# par aucun scénario, puisque les goldens sont figés en mode normal. Sans ce
+# second appel, ecrirePlanete, ecrirePossession et les branches détaillées de
+# flotte ne seraient jamais exécutées par le harnais, et le jour où quelqu'un
+# ouvre cette porte pour diagnostiquer une divergence, il découvrirait qu'elle
+# est cassée depuis longtemps. Le contrôle est volontairement grossier, un
+# fichier non vide et strictement plus détaillé que le mode normal.
+moteur "$WORK" dumpState "$WORK/dump-complet.txt" --complet
+test -s "$WORK/dump-complet.txt" || { echo "ECHEC: dump-complet.txt vide ou absent"; exit 1; }
+n_normal=$(wc -l < "$WORK/dump.txt" | tr -d " ")
+n_complet=$(wc -l < "$WORK/dump-complet.txt" | tr -d " ")
+if [ "$n_complet" -le "$n_normal" ]; then
+  echo "ECHEC: --complet rend $n_complet lignes contre $n_normal en mode normal, il devrait en rendre strictement plus"
+  exit 1
+fi
+grep -q '^systeme\.[^ ]*\.planete\.' "$WORK/dump-complet.txt" \
+  || { echo "ECHEC: --complet ne détaille aucune planète"; exit 1; }
+
+echo "OK: $n_normal lignes en mode normal, $n_complet en --complet"
