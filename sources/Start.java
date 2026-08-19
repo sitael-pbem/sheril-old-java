@@ -19,6 +19,7 @@ public class Start {
         System.out.println("addNewGalaxy <num>: Ajoute une galaxy à l'Univers");
         System.out.println("newRound: passe le tour");
         System.out.println("listNeutralFleets: affiche la liste des flottes du neutre");
+        System.out.println("dumpState <fichier> [--complet]: écrit l'état de l'univers en texte");
     }
 
     public static void main(String[] args) {
@@ -43,6 +44,20 @@ public class Start {
             newRound();
         } else if (args[0].equals("listFleet")) {
             listNeutralFleets();
+        } else if (args[0].equals("dumpState")) {
+            if (args.length < 2) {
+                System.out.println("Il faut spécifier le fichier de sortie");
+                displayHelp();
+                System.exit(-1);
+            }
+            boolean complet = (args.length > 2) && args[2].equals("--complet");
+            try {
+                DumpEtat.ecrire(args[1], complet);
+            } catch (IOException e) {
+                System.out.println("Erreur d'écriture du dump " + args[1]);
+                e.printStackTrace();
+                System.exit(-1);
+            }
         } else if (args[0].equals("help")) {
             displayHelp();
         } else {
