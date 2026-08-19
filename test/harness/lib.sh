@@ -34,6 +34,45 @@
 # Un scénario qui enchaîne deux actions dépendantes doit donc les étaler sur
 # des tours distincts, jamais les écrire dans le même turn-N.sql en comptant
 # sur l'ordre d'écriture.
+#
+# PIÈGE À CONNAÎTRE (ronde de correction 1 de la tâche 8, SHRL-46) : l'oracle
+# de déterminisme (check-determinisme.sh) ne peut attester QUE de ce que ses
+# artefacts comparés montrent. Avant cette ronde, il ne comparait que les
+# dump-tour-*.txt ; il compare désormais aussi les rapports XML
+# (data/tour<n>/rapports/**/rapport.xml). Mais même élargi, il reste
+# structurellement aveugle à deux choses :
+#   - ce que DumpEtat n'écrit jamais : aucun message, aucun événement, rien
+#     de ce qui vit dans Commentaire (Commentaire.java:17-42, une ArrayList
+#     en ordre d'insertion). Un non-déterminisme qui ne porte QUE sur l'ordre
+#     des messages d'un commandant ne se voit que dans son rapport XML,
+#     jamais dans son dump.
+#   - ce que DumpEtat réordonne avant d'écrire : DumpEtat.ecrireMarche
+#     re-trie déjà les offres du marché par identifiant croissant
+#     (DumpEtat.java:250-255) avant de les écrire, donc même la section
+#     marché du dump est insensible à l'ordre d'itération de la structure
+#     qui les a produites.
+# Concrètement : un scénario peut exercer un vrai défaut d'ordre
+# d'itération (ex. une Map dont la clé n'a ni equals() ni hashCode(), donc
+# hachée par identité mémoire) sans que check-determinisme.sh ne rende jamais
+# rouge, si l'unique effet observable de cet ordre tombe dans l'un des deux
+# angles morts ci-dessus. Ne pas conclure "aucun défaut" d'un run vert sans
+# avoir vérifié CE QUE l'oracle compare réellement pour le scénario en
+# question. Vécu sur 03-marche (SHRL-46, task-8) : reglerEncheresMarche()
+# itérait une Map<OffreMarche, List<Enchere>> hachée par identité, 8
+# exécutions consécutives de check-determinisme.sh restaient vertes tant que
+# seuls les dumps étaient comparés, l'effet réel (ordre des messages d'achat
+# dans le rapport de l'acheteur) n'étant devenu visible qu'après l'ajout de
+# la comparaison XML ci-dessus.
+#
+# PIÈGE À CONNAÎTRE (format du dump, ronde de correction 1 de la tâche 8,
+# SHRL-46) : DumpEtat.ecrirePossession écrit
+# ".marchandise.<code> = <PRIX>/<QUANTITE>" (DumpEtat.java:111-113), le prix
+# d'abord, la quantité ensuite — l'inverse d'une lecture naïve. Une ligne
+# "marchandise.7 = 49/1" signifie prix 49, quantité 1, pas quantité 49.
+# Piège vécu sur 03-marche : un ordre vendre_galactique visant à vendre 40
+# ou 50 unités d'une marchandise lue "= 49/1" échoue systématiquement
+# (ER_COMMANDANT_VENTE_GALACTIQUE_0002), silencieusement côté dump, visible
+# seulement dans le rapport XML du vendeur.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MYSQL_CLI="${MYSQL_CLI:-docker compose exec -T db mysql}"
