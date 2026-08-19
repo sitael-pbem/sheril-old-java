@@ -20,3 +20,6 @@ errata
 /php/stats/*
 /php/tour.txt
 carnet.txt
+
+# repertoire de travail jetable du harnais de non-regression
+test/work/
