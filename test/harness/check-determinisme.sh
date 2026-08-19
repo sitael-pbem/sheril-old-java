@@ -13,10 +13,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 SCENARIO="${1:?usage: check-determinisme.sh <scenario>}"
 TOURS="$(propriete "$REPO/test/scenarios/$SCENARIO/scenario.properties" TOURS)"
 
+# Le journal complet ($workdir.log) est la seule trace d'un arrêt dur de
+# run-scenario.sh (marqueur non résolu, base indisponible, moteur qui ne
+# rend pas la main) : le "|| true" avale le code de retour, pas la sortie,
+# précisément pour garder cette trace lisible au lieu de forcer à rejouer le
+# scénario à la main pour savoir ce qui s'est passé.
 capturer() {
-  local workdir="$1"
+  local workdir="$1" log="$1.log"
   rm -rf "$workdir"
-  "$REPO/test/harness/run-scenario.sh" "$SCENARIO" --workdir "$workdir" > /dev/null 2>&1 || true
+  "$REPO/test/harness/run-scenario.sh" "$SCENARIO" --workdir "$workdir" > "$log" 2>&1 || true
 }
 
 capturer "$REPO/test/work/det-a"
@@ -26,8 +31,16 @@ ECHECS=0
 for n in $(seq 1 "$TOURS"); do
   a="$REPO/test/work/det-a/dump-tour-$n.txt"
   b="$REPO/test/work/det-b/dump-tour-$n.txt"
-  if [ ! -f "$a" ] || [ ! -f "$b" ]; then
-    echo "ECHEC: dump manquant pour le tour $n (run-scenario.sh a-t-il échoué avant de l'écrire ?)" >&2
+  manquant=0
+  if [ ! -f "$a" ]; then
+    echo "ECHEC: dump manquant pour le tour $n (répétition a) : cause dans $REPO/test/work/det-a.log" >&2
+    manquant=1
+  fi
+  if [ ! -f "$b" ]; then
+    echo "ECHEC: dump manquant pour le tour $n (répétition b) : cause dans $REPO/test/work/det-b.log" >&2
+    manquant=1
+  fi
+  if [ "$manquant" = "1" ]; then
     ECHECS=$((ECHECS+1))
     continue
   fi

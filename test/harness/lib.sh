@@ -14,6 +14,26 @@
 # l'ordre SQL, jamais POSX = X. Vécu sur 01-combat : une flotte envoyée avec
 # POSX = @CAPX(...)@ / POSY = @CAPY(...)@ atterrit sur une position qui n'existe
 # pas, silencieusement (aucun système à cet endroit, aucun combat).
+#
+# PIÈGE À CONNAÎTRE (ronde de correction 2, SHRL-46) : dans un même tour, les
+# tables d'ordres sont traitées dans l'ordre de leurs index de
+# Const.NOMS_TABLES_ORDRES (ReceptionOrdres.deroulementOrdres boucle sur
+# index croissant), jamais dans l'ordre où le scénario les écrit. Un ordre
+# ne peut donc jamais consommer, le même tour, ce que produit un ordre placé
+# plus loin dans ce tableau. Deux exemples vécus :
+#   - creer_strategie (index 46) est traité APRÈS deplacer_flotte (index 33) :
+#     une stratégie créée au tour N n'est utilisable par un deplacer_flotte
+#     qui la référence par son nom qu'à partir du tour N+1
+#     (Commandant.deplacerFlotte retombe silencieusement, sans erreur, sur
+#     la stratégie par défaut si le nom est encore inconnu).
+#   - programmer_construction ne rend pas le vaisseau construit disponible
+#     ce même tour : la production a sa propre durée (le nombre de tours du
+#     plan), et un ordre qui voudrait l'utiliser (deplacer_flotte,
+#     construire_flotte...) doit attendre le tour où la construction est
+#     effectivement sortie du chantier.
+# Un scénario qui enchaîne deux actions dépendantes doit donc les étaler sur
+# des tours distincts, jamais les écrire dans le même turn-N.sql en comptant
+# sur l'ordre d'écriture.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MYSQL_CLI="${MYSQL_CLI:-docker compose exec -T db mysql}"

@@ -150,7 +150,9 @@ for n in $(seq 1 $((TOURS+1))); do
     ECHECS=$((ECHECS+1))
     continue
   fi
+  n_xml=0
   for xml in $(find "$tour_dir" -name '*.xml'); do
+    n_xml=$((n_xml+1))
     test -s "$xml" || { echo "ECHEC: rapport XML vide: $xml" >&2; ECHECS=$((ECHECS+1)); }
     python3 -c "import sys,xml.dom.minidom as m; m.parse(sys.argv[1])" "$xml" \
       || { echo "ECHEC: rapport XML mal formé: $xml" >&2; ECHECS=$((ECHECS+1)); }
@@ -160,6 +162,16 @@ for n in $(seq 1 $((TOURS+1))); do
       ECHECS=$((ECHECS+1))
     fi
   done
+  # Garde de non-vacuité (même motif que check-composants-determinisme.sh) :
+  # un répertoire de rapports présent mais vide de XML ne fait échouer aucune
+  # des boucles ci-dessus, donc aucune erreur moteur n'y serait jamais lue.
+  # Tour joué = au moins un commandant humain qui rend, donc au moins un
+  # rapport.xml par tour de la plage contrôlée (1 à TOURS+1) : zéro XML n'est
+  # jamais un cas légitime ici, toujours un échec.
+  if [ "$n_xml" -eq 0 ]; then
+    echo "ECHEC: aucun rapport XML dans $tour_dir : un répertoire vide de XML masquerait silencieusement toute erreur moteur de ce tour" >&2
+    ECHECS=$((ECHECS+1))
+  fi
 done
 
 if [ "$ECHECS" -gt 0 ]; then
