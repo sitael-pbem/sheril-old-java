@@ -4,7 +4,7 @@
 --
 -- ATTENTION AU FORMAT DU DUMP : DumpEtat.ecrirePossession ecrit
 -- ".marchandise.<code> = <PRIX>/<QUANTITE>" (prix d'abord, quantite ensuite,
--- DumpEtat.java:111-113), l'inverse de ce qu'on lirait naivement. Apres un
+-- DumpEtat.java:120-122), l'inverse de ce qu'on lirait naivement. Apres un
 -- seul tour de production (aucun ordre au tour 1), une possession de depart
 -- ne detient que 1 a 3 unites de chaque marchandise (verifie :
 -- commandant.1.possession.<capitale>.marchandise.7 = 49/1, soit prix 49,

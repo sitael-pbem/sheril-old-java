@@ -152,25 +152,38 @@ fi
 #    8 à 3 tours laisserait cinq références orphelines, donc cinq tours de
 #    couverture perdus en silence, le dossier gardant l'apparence d'un
 #    scénario long.
+# Un rang non numérique est un ECHEC, jamais un « continue ». Un turn-5bis.sql
+# ou un assertions-tour-2b.txt n'est chargé par aucune boucle du script : le
+# passer en silence laisserait exactement le travail versionné et jamais joué
+# que ces gardes existent pour interdire.
+verifier_rang_de_fichier() {
+  local f="$1" prefixe="$2" suffixe="$3" quoi="$4" n
+  n="$(basename "$f" "$suffixe")"; n="${n#$prefixe}"
+  case "$n" in
+    ''|*[!0-9]*)
+      echo "ECHEC: $f porte un rang de tour non numérique ($n) : $quoi" >&2
+      ECHECS=$((ECHECS+1))
+      return ;;
+  esac
+  if [ "$((10#$n))" -gt "$TOURS" ]; then
+    echo "ECHEC: $f porte le tour $((10#$n)) alors que TOURS = $TOURS : $quoi" >&2
+    ECHECS=$((ECHECS+1))
+  fi
+}
+
 echo "-- cohérence du dossier de scénario avec TOURS = $TOURS"
 for f in "$DIR"/turn-*.sql; do
   [ -e "$f" ] || continue
-  n="$(basename "$f" .sql)"; n="${n#turn-}"
-  case "$n" in *[!0-9]*) continue ;; esac
-  if [ "$n" -gt "$TOURS" ]; then
-    echo "ECHEC: $f porte le tour $n alors que TOURS = $TOURS : ces ordres ne sont jamais injectés" >&2
-    ECHECS=$((ECHECS+1))
-  fi
+  verifier_rang_de_fichier "$f" turn- .sql "ces ordres ne sont jamais injectés"
+done
+for f in "$DIR"/assertions-tour-*.txt; do
+  [ -e "$f" ] || continue
+  verifier_rang_de_fichier "$f" assertions-tour- .txt "ces assertions ne sont jamais vérifiées"
 done
 if [ "$UPDATE" != "1" ]; then
   for f in "$DIR"/golden/dump-tour-*.txt; do
     [ -e "$f" ] || continue
-    n="$(basename "$f" .txt)"; n="${n#dump-tour-}"
-    case "$n" in *[!0-9]*) continue ;; esac
-    if [ "$n" -gt "$TOURS" ]; then
-      echo "ECHEC: $f porte le tour $n alors que TOURS = $TOURS : ce golden n'est jamais comparé" >&2
-      ECHECS=$((ECHECS+1))
-    fi
+    verifier_rang_de_fichier "$f" dump-tour- .txt "ce golden n'est jamais comparé"
   done
 fi
 

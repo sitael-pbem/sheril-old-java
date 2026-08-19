@@ -1,14 +1,31 @@
--- Deux commandants de races différentes.
+-- Deux commandants de races différentes, dix frégates demandées chacun.
 --
--- ATTENTION, aa_vaisseaux n'est PAS la flotte de départ, et ce fichier sert de
--- gabarit : Flotte.choixFlotteDeDepart (Flotte.java:257-289) lit VAISSEAU comme
--- un INDICE DE QUOTA de 1 à 5 (1 Intercepteur, 2 Chasseur, 3 Fregate,
--- 4 Eclaireur, 5 Grand Bombardier) et ignore silencieusement toute autre
--- valeur, puis répartit une flotte de taille imposée. Les deux lignes
--- ci-dessous ne donnent donc pas dix frégates : le golden du tour 1 rend
--- 69 vaisseaux (20 Chasseur, 20 Fregate, 20 Grand Bombardier, 6 Intercepteur,
--- 3 Eclaireur). Le même scénario sans aucune ligne aa_vaisseaux en rendrait 68 :
--- l'écart total de ces deux lignes est d'UN vaisseau.
+-- ATTENTION, ce fichier sert de gabarit et le golden le contredit : Alpha part
+-- avec 69 vaisseaux de composition variée, Beta avec exactement 10 Fregate
+-- standard. Deux mécanismes se superposent, tous deux à connaître avant
+-- d'écrire un aa_vaisseaux.
+--
+-- 1. aa_vaisseaux N'AJOUTE PAS des vaisseaux, il REMPLACE la flotte. VAISSEAU
+--    est un indice de 1 à 5 dans une table de quotas nommés (1 Intercepteur,
+--    2 Chasseur, 3 Fregate, 4 Eclaireur, 5 Grand Bombardier), et dès que la map
+--    est non vide, Flotte.choixFlotteDeDepart remet TOUS les quotas à zéro
+--    (Flotte.java:280) avant d'appliquer les seuls indices présents. Demander
+--    « 10 en indice 3 » donne donc 10 frégates et rien d'autre, pas 10 frégates
+--    en plus du reste. Un indice hors de 1..5 est ignoré, donc une ligne unique
+--    hors bornes donne une flotte VIDE, sans erreur.
+--
+-- 2. La PREMIÈRE ligne de aa_vaisseaux n'est jamais lue, quel que soit le
+--    commandant. ProductionOrdres.java:493-495 fait r2.first() puis
+--    while (r2.next()) : first() place déjà le curseur SUR la ligne 1, que le
+--    premier next() saute. Le premier commandant inscrit garde donc la flotte
+--    par défaut. C'est un bug moteur, pas une propriété du format, et il vaut
+--    pour une vraie partie : le premier joueur inscrit n'obtient pas la flotte
+--    qu'il a demandée. Suivi en SHRL-54.
+--
+-- D'où l'asymétrie du golden : la ligne d'Alpha est la première de la table,
+-- elle est perdue, Alpha garde les quotas par défaut ; celle de Beta est lue et
+-- remplace tout. Vérifié aussi sur 05-alliances, trois lignes identiques, le
+-- premier commandant à 68 vaisseaux et les deux autres à 3.
 -- L'ADRESSE sert de clé de jointure entre aa_inscription et aa_vaisseaux,
 -- et doit passer InternetAddress.parse (ProductionOrdres.java:468).
 INSERT INTO aa_inscription (NOM, ADRESSE, RACE, FLOTTE) VALUES ('Alpha', 'alpha@sheril.test', 0, 0);

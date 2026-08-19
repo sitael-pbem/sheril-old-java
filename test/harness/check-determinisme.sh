@@ -13,7 +13,7 @@
 # la tâche 8 (SHRL-46) : le dump ne montre ni messages ni événements
 # (DumpEtat n'écrit que l'état, jamais le journal), et
 # DumpEtat.ecrireMarche re-trie les offres par identifiant avant écriture
-# (DumpEtat.java:250-255) — la comparaison des seuls dump-tour-*.txt est
+# (DumpEtat.java:258-263) — la comparaison des seuls dump-tour-*.txt est
 # donc structurellement aveugle à tout non-déterminisme qui ne porte que sur
 # l'ordre des messages d'un rapport (cf. tête de lib.sh, angle mort de
 # l'oracle). Vécu : reglerEncheresMarche() itérait une Map<OffreMarche,...>
@@ -79,8 +79,8 @@ done
 XML_A="$(cd "$REPO/test/work/det-a" && /usr/bin/find data -name '*.xml' | sort)"
 XML_B="$(cd "$REPO/test/work/det-b" && /usr/bin/find data -name '*.xml' | sort)"
 
-# Garde de non-vacuité (même motif que run-scenario.sh:165-172 et
-# check-composants-determinisme.sh:37-45) : un `find` sur un répertoire
+# Garde de non-vacuité (même motif que run-scenario.sh:213-222 et
+# check-composants-determinisme.sh:51-67) : un `find` sur un répertoire
 # existant mais vide de résultat ne fait pas échouer le pipeline (rien à voir
 # avec le chemin absent, seul cas que couvrirait pipefail), et une boucle
 # `while read` sur une chaîne vide ne lit qu'une ligne vide qu'elle escamote.

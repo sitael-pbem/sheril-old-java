@@ -1,7 +1,7 @@
 # Effet de nommer_dirigeant (turn-4.sql) : les trois membres votent pour
 # Membre (2), Alliance.traiterVoteDirigeant tranche dans le même tour
 # (déclenché depuis ReceptionOrdres au moment de traiter exclure_alliance,
-# ReceptionOrdres.java:443-444). Le dirigeant passe de 1 (Chef, concepteur
+# ReceptionOrdres.java:450-451). Le dirigeant passe de 1 (Chef, concepteur
 # par défaut) à 2 (Membre, élu) : effet observable et discriminant, vue
 # rouge sans l'action (dirigeant resterait 1).
 tour = 5

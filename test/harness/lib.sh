@@ -59,12 +59,19 @@
 # assertion sur l'effet de jeu la voit. Quatre cas rencontrés :
 #   - deplacer_flotte.POSX alimente Y et POSY alimente X (cf. piège ci-dessus) ;
 #   - exclure_alliance.VOTE porte le NUMÉRO du commandant visé, pas un booléen
-#     (ReceptionOrdres.java:481-482 vers voterExclusionCommandant(int, int)).
+#     (ReceptionOrdres.java:489 vers voterExclusionCommandant(int, int)).
 #     Un premier essai a exclu le mauvais commandant sans la moindre erreur,
 #     et c'est l'assertion alliance.0.membres qui l'a rattrapé, pas la garde ;
-#   - aa_vaisseaux.VAISSEAU est un indice de quota de 1 à 5, pas un numéro de
-#     plan, et toute valeur hors bornes est ignorée en silence
-#     (Flotte.choixFlotteDeDepart, Flotte.java:257-289) ;
+#   - aa_vaisseaux.VAISSEAU est un indice de 1 à 5 dans une table de quotas
+#     nommés, pas un numéro de plan de vaisseau, et la table REMPLACE la flotte
+#     au lieu de s'y ajouter : dès que la map est non vide, tous les quotas sont
+#     remis à zéro (Flotte.java:280) avant d'appliquer les indices présents.
+#     Conséquence plus dure qu'un simple « ignoré » : une ligne unique hors de
+#     1..5 donne une flotte VIDE, sans erreur. Et la PREMIÈRE ligne de la table
+#     n'est jamais lue, r2.first() plaçant déjà le curseur sur elle avant que
+#     while (r2.next()) ne la saute (ProductionOrdres.java:493-495) : le premier
+#     commandant inscrit garde la flotte par défaut. Bug moteur, suivi en
+#     SHRL-54 (Flotte.choixFlotteDeDepart, Flotte.java:257-306) ;
 #   - le dump écrit marchandise.<code> = <PRIX>/<QUANTITE> (cf. piège plus bas).
 # Règle qui en découle : tout scénario doit porter au moins une assertion sur
 # un EFFET DE JEU observable, jamais seulement sur la présence des acteurs.
@@ -82,7 +89,7 @@
 #     jamais dans son dump.
 #   - ce que DumpEtat réordonne avant d'écrire : DumpEtat.ecrireMarche
 #     re-trie déjà les offres du marché par identifiant croissant
-#     (DumpEtat.java:250-255) avant de les écrire, donc même la section
+#     (DumpEtat.java:258-263) avant de les écrire, donc même la section
 #     marché du dump est insensible à l'ordre d'itération de la structure
 #     qui les a produites.
 # Concrètement : un scénario peut exercer un vrai défaut d'ordre
@@ -100,7 +107,7 @@
 #
 # PIÈGE À CONNAÎTRE (format du dump, ronde de correction 1 de la tâche 8,
 # SHRL-46) : DumpEtat.ecrirePossession écrit
-# ".marchandise.<code> = <PRIX>/<QUANTITE>" (DumpEtat.java:111-113), le prix
+# ".marchandise.<code> = <PRIX>/<QUANTITE>" (DumpEtat.java:120-122), le prix
 # d'abord, la quantité ensuite — l'inverse d'une lecture naïve. Une ligne
 # "marchandise.7 = 49/1" signifie prix 49, quantité 1, pas quantité 49.
 # Piège vécu sur 03-marche : un ordre vendre_galactique visant à vendre 40
@@ -122,7 +129,17 @@ DB_HOST="${DB_HOST:-127.0.0.1:3311}"
 # témoin de cette garde : ClassNotFoundException sur Start, cause invisible
 # parce qu'elle partait dans init.log.
 JAR="${SHERIL_JAR:-$REPO/sheril.jar}"
-case "$JAR" in /*) ;; *) JAR="$(cd "$(dirname "$JAR")" 2>/dev/null && pwd)/$(basename "$JAR")" ;; esac
+# Si le parent n'existe pas, le chemin est laissé TEL QUEL plutôt que réduit à
+# "/$(basename)" : le message d'échec doit nommer ce que l'utilisateur a fourni,
+# pas un chemin fantôme fabriqué par la normalisation elle-même.
+case "$JAR" in
+  /*) ;;
+  *)
+    if _d="$(cd "$(dirname "$JAR")" 2>/dev/null && pwd)"; then
+      JAR="$_d/$(basename "$JAR")"
+    fi
+    unset _d ;;
+esac
 
 # Refuse de démarrer si le jar ne porte pas le bytecode de dumpState.
 #
@@ -146,11 +163,25 @@ verifier_jar() {
   # vient précisément de TROUVER la classe, et la garde accuserait un jar sain.
   # Un contrôle ne doit pas tirer son verdict d'un statut qui dépend de l'ordre
   # d'entrées dans une archive.
+  # L'échec de la commande jar est distingué d'un jar périmé, et sa cause est
+  # restituée. Avaler le code de retour par « 2>/dev/null || true » rendait une
+  # chaîne vide, donc un diagnostic « périmé, reconstruisez-le » sur un jar
+  # parfaitement à jour, avec un remède sans effet. Un simple « command -v jar »
+  # ne suffit pas : macOS fournit un /usr/bin/jar factice qui existe, répond
+  # « Unable to locate a Java Runtime » et sort en erreur. Seul le code de
+  # retour de l'appel réel discrimine.
+  local contenu statut=0
+  contenu="$(jar tf "$JAR" 2>&1)" || statut=$?
+  if [ "$statut" -ne 0 ]; then
+    echo "ECHEC: impossible de lire $JAR avec la commande jar (code $statut). Cause ci-dessous." >&2
+    printf '%s\n' "$contenu" >&2
+    echo "       Ce n'est PAS un jar périmé : ajouter le JDK au PATH, par exemple" >&2
+    echo "       sous macOS avec Homebrew, PATH=\"/opt/homebrew/opt/openjdk/bin:\$PATH\"" >&2
+    return 1
+  fi
   # La comparaison est ancrée par des sauts de ligne, pour rester une égalité
   # d'entrée et non une inclusion de sous-chaîne : « Start.class » ne doit pas
   # être satisfait par « zIgzAg/.../AutreStart.class ».
-  local contenu
-  contenu="$(jar tf "$JAR" 2>/dev/null || true)"
   case $'\n'"$contenu"$'\n' in
     *$'\n'"zIgzAg/jeu/oceane/DumpEtat.class"$'\n'*) ;;
     *)
@@ -288,6 +319,11 @@ tours_du_scenario() {
       echo "ECHEC: TOURS invalide dans $1 : [$v], un entier strictement positif est attendu" >&2
       return 1 ;;
   esac
+  # Les zéros de tête sont retirés : les appelants font $((TOURS+1)), et bash
+  # interprète un entier préfixé de 0 comme de l'octal. TOURS = 08 lèverait
+  # « value too great for base » au milieu du contrôle des rapports, très loin
+  # de sa cause.
+  v="$((10#$v))"
   if [ "$v" -lt 1 ]; then
     echo "ECHEC: TOURS = $v dans $1, un scénario doit jouer au moins un tour" >&2
     return 1
