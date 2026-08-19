@@ -296,7 +296,7 @@ jobs:
         run: |
           set -euo pipefail
           source test/harness/lib.sh
-          tours="$(propriete test/scenarios/02-colonisation/scenario.properties TOURS)"
+          tours="$(tours_du_scenario test/scenarios/02-colonisation/scenario.properties)"
           dernier_tour_rapports="test/work/02-colonisation/data/tour$((tours+1))/rapports"
           nb_attendu=$(grep -c '^INSERT INTO aa_inscription' test/scenarios/02-colonisation/setup.sql)
           echo "dernier tour joué: $tours, rapports attendus dans $dernier_tour_rapports"
@@ -363,7 +363,7 @@ jobs:
         run: |
           set -euo pipefail
           source test/harness/lib.sh
-          tours="$(propriete test/scenarios/02-colonisation/scenario.properties TOURS)"
+          tours="$(tours_du_scenario test/scenarios/02-colonisation/scenario.properties)"
           dernier_tour_rapports="test/work/02-colonisation/data/tour$((tours+1))/rapports"
           echo "dernier tour joué: $tours, rapports capturés depuis $dernier_tour_rapports"
 

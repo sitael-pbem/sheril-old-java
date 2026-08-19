@@ -23,7 +23,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 SCENARIO="${1:?usage: check-determinisme.sh <scenario>}"
-TOURS="$(propriete "$REPO/test/scenarios/$SCENARIO/scenario.properties" TOURS)"
+TOURS="$(tours_du_scenario "$REPO/test/scenarios/$SCENARIO/scenario.properties")"
 
 # Le journal complet ($workdir.log) est la seule trace d'un arrêt dur de
 # run-scenario.sh (marqueur non résolu, base indisponible, moteur qui ne
@@ -78,10 +78,20 @@ XML_B="$(cd "$REPO/test/work/det-b" && /usr/bin/find data -name '*.xml' | sort)"
 # script conclurait "reproductible" sans avoir rien comparé. Le message dit
 # ce qui est réellement constaté (aucun rapport comparé), pas un problème de
 # déterminisme.
-n_xml_a=0
-[ -n "$XML_A" ] && n_xml_a="$(printf '%s\n' "$XML_A" | /usr/bin/wc -l | tr -d ' ')"
-if [ "$n_xml_a" -eq 0 ]; then
-  echo "ECHEC: aucun rapport XML trouvé dans $REPO/test/work/det-a, la comparaison des rapports n'a rien comparé" >&2
+#
+# La garde compte les `rapport.xml`, PAS l'ensemble des `*.xml` de la liste
+# comparée. Le moteur écrit aussi des `data/stats/data.xml` et des
+# `data/tour<n>/stats/data.xml` : sur un déroulé réel de 05-alliances, det-a
+# porte 25 XML dont 18 rapports et 7 fichiers de statistiques. Compter les 25
+# rendrait la garde inopérante, un moteur qui cesserait d'écrire tout rapport
+# laissant encore un compte de 7, la garde muette, et ce script concluant
+# « reproductible (dumps et rapports XML) » en n'ayant comparé que des stats.
+# La comparaison, elle, reste sur l'ensemble des XML : les stats sont une
+# couverture supplémentaire gratuite, ce n'est que le compteur de la garde qui
+# doit porter sur ce que le message promet.
+n_rapports_a="$(cd "$REPO/test/work/det-a" && /usr/bin/find data -name 'rapport.xml' | /usr/bin/wc -l | tr -d ' ')"
+if [ "$n_rapports_a" -eq 0 ]; then
+  echo "ECHEC: aucun rapport.xml trouvé dans $REPO/test/work/det-a, la comparaison des rapports n'a rien comparé (cause dans $REPO/test/work/det-a.log)" >&2
   ECHECS=$((ECHECS+1))
 elif [ "$XML_A" != "$XML_B" ]; then
   echo "ECHEC: la liste des rapports XML produits diffère entre les deux répétitions" >&2

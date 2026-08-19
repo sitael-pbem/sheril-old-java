@@ -125,7 +125,69 @@ moteur() {
   ( cd "$work" && java -cp "$REPO/sheril.jar" Start "$@" )
 }
 
-# Lit une clé de scenario.properties.
+# Lit une clé de scenario.properties. Échoue si la clé est absente OU si elle
+# est présente avec une valeur vide.
+#
+# La distinction compte, et la garde ne couvre pas les deux cas pour la même
+# raison. Clé ABSENTE : le `grep` sans correspondance faisait déjà échouer la
+# fonction sous `set -o pipefail`, donc l'appelant avortait bruyamment. Clé
+# PRÉSENTE MAIS VIDE (`TOURS =`) : la fonction rendait une chaîne vide avec un
+# code 0, et l'appelant continuait avec une valeur qu'il n'a jamais vérifiée.
+# C'est ce second cas qui a produit un vert : `check-determinisme.sh` bâtit sa
+# boucle de comparaison sur `seq 1 "$TOURS"`, `seq 1 ""` échoue sans faire
+# échouer la liste d'un `for`, donc zéro itération, zéro dump comparé, et le
+# script conclut « reproductible » avec un code 0. Le même `TOURS` vide donne
+# `tour$((tours+1))` = `tour1` dans deux jobs du workflow, et un `RANDOM_SEED`
+# vide ferait tourner le moteur NON SEMÉ avec des goldens qui divergent de
+# façon erratique.
+#
+# `grep -m1` plutôt que `| head -1` : `head` ferme le tuyau dès la première
+# ligne lue, ce qui peut faire sortir `grep` sur SIGPIPE (141) et faire échouer
+# le pipeline sous `pipefail` pour une raison qui n'a rien à voir avec la clé.
 propriete() {
-  grep -E "^$2[[:space:]]*=" "$1" | head -1 | cut -d= -f2- | xargs
+  local v
+  if ! v="$(grep -m1 -E "^$2[[:space:]]*=" "$1" | cut -d= -f2- | xargs)"; then
+    echo "ECHEC: clé $2 absente de $1" >&2
+    return 1
+  fi
+  if [ -z "$v" ]; then
+    echo "ECHEC: clé $2 présente mais vide dans $1, aucune valeur par défaut n'est supposée" >&2
+    return 1
+  fi
+  printf '%s\n' "$v"
+}
+
+# Lit une clé FACULTATIVE. Rend une chaîne vide, sans message, quand la clé est
+# absente ou vide.
+#
+# Réservé aux clés dont l'absence est un cas légitime et dont le défaut est
+# explicite chez l'appelant (aujourd'hui la seule est ERREURS_TOLEREES, dont
+# l'absence vaut « false »). Ne jamais l'employer pour une clé dont dépend le
+# déroulé du scénario : c'est précisément le silence de `propriete` sur une
+# valeur vide qui a produit un vert sans rien exercer.
+propriete_optionnelle() {
+  propriete "$1" "$2" 2>/dev/null || true
+}
+
+# Lit TOURS et impose son contrat : un entier strictement positif.
+#
+# La garde de non-vacuité de `propriete` ne suffit pas ici. Une valeur non vide
+# mais non numérique (`TOURS = 2 tours`, `TOURS = huit`) la traverse, et rouvre
+# exactement le chemin décrit ci-dessus : `seq 1 "2 tours"` échoue, la boucle
+# n'itère pas, et le script rend vert sans avoir rien comparé. Le contrat sur la
+# valeur appartient donc à l'appelant qui sait ce qu'il attend, pas au lecteur
+# de propriétés générique.
+tours_du_scenario() {
+  local v
+  v="$(propriete "$1" TOURS)" || return 1
+  case "$v" in
+    *[!0-9]*)
+      echo "ECHEC: TOURS invalide dans $1 : [$v], un entier strictement positif est attendu" >&2
+      return 1 ;;
+  esac
+  if [ "$v" -lt 1 ]; then
+    echo "ECHEC: TOURS = $v dans $1, un scénario doit jouer au moins un tour" >&2
+    return 1
+  fi
+  printf '%s\n' "$v"
 }

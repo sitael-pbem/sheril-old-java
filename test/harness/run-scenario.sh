@@ -47,12 +47,12 @@ test -d "$DIR" || { echo "scénario inconnu: $SCENARIO" >&2; exit 2; }
 
 SEED="$(propriete "$DIR/scenario.properties" RANDOM_SEED)"
 DATE_FIGEE="$(propriete "$DIR/scenario.properties" DATE_FIGEE)"
-TOURS="$(propriete "$DIR/scenario.properties" TOURS)"
-# || true : ERREURS_TOLEREES est facultative, et propriete() (lib.sh) échoue
-# silencieusement sous set -e -o pipefail quand la clé est absente (grep sans
-# correspondance). Connu, non retouché ici (lib.sh reste hors périmètre) ;
-# neutralisé localement pour cette lecture optionnelle.
-ERREURS_TOLEREES="$(propriete "$DIR/scenario.properties" ERREURS_TOLEREES || true)"
+TOURS="$(tours_du_scenario "$DIR/scenario.properties")"
+# ERREURS_TOLEREES est la seule clé facultative du format : son absence vaut
+# "false", et c'est un cas légitime que le harnais ne doit pas signaler. Les
+# trois autres clés passent par propriete() ou tours_du_scenario(), qui
+# échouent bruyamment sur une clé absente comme sur une valeur vide.
+ERREURS_TOLEREES="$(propriete_optionnelle "$DIR/scenario.properties" ERREURS_TOLEREES)"
 
 echo "== $SCENARIO : graine $SEED, $TOURS tour(s), répertoire $WORK"
 
@@ -137,6 +137,40 @@ done
 
 if [ "$UPDATE" = "1" ]; then
   echo "== goldens régénérés pour $SCENARIO, relire le diff avant de committer"
+fi
+
+# Le contenu du dossier de scénario doit correspondre à TOURS, dans les deux
+# sens. Les deux contrôles ci-dessous ferment deux façons de livrer du travail
+# qui n'exerce rien, sans qu'aucune ligne de sortie ne le signale.
+#
+# 1. Un turn-N.sql avec N > TOURS n'est jamais injecté : la boucle des tours
+#    ne lit que 1..TOURS. Des ordres versionnés, relus en revue, et jamais
+#    joués. C'est le mode d'échec de ce harnais, transposé au dossier de
+#    scénario plutôt qu'à une boucle.
+# 2. Un golden avec N > TOURS n'est jamais comparé. Raccourcir un scénario de
+#    8 à 3 tours laisserait cinq références orphelines, donc cinq tours de
+#    couverture perdus en silence, le dossier gardant l'apparence d'un
+#    scénario long.
+echo "-- cohérence du dossier de scénario avec TOURS = $TOURS"
+for f in "$DIR"/turn-*.sql; do
+  [ -e "$f" ] || continue
+  n="$(basename "$f" .sql)"; n="${n#turn-}"
+  case "$n" in *[!0-9]*) continue ;; esac
+  if [ "$n" -gt "$TOURS" ]; then
+    echo "ECHEC: $f porte le tour $n alors que TOURS = $TOURS : ces ordres ne sont jamais injectés" >&2
+    ECHECS=$((ECHECS+1))
+  fi
+done
+if [ "$UPDATE" != "1" ]; then
+  for f in "$DIR"/golden/dump-tour-*.txt; do
+    [ -e "$f" ] || continue
+    n="$(basename "$f" .txt)"; n="${n#dump-tour-}"
+    case "$n" in *[!0-9]*) continue ;; esac
+    if [ "$n" -gt "$TOURS" ]; then
+      echo "ECHEC: $f porte le tour $n alors que TOURS = $TOURS : ce golden n'est jamais comparé" >&2
+      ECHECS=$((ECHECS+1))
+    fi
+  done
 fi
 
 echo "-- assertions (dernier tour)"
