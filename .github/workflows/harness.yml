@@ -1,0 +1,236 @@
+name: Harnais de non-régression
+
+# compile.yml (déclenché sur pull_request uniquement) reste inchangé et
+# continue de rendre la main en une trentaine de secondes. Ce fichier ne le
+# remplace pas, il s'y ajoute. Les deux workflows n'écoutent pas les mêmes
+# événements : compile.yml n'a pas besoin de push/workflow_dispatch (son seul
+# rôle est le garde-fou de compilation avant merge), alors que harness.yml
+# doit pouvoir attester le main après merge (push) et être rejouable à la
+# demande (workflow_dispatch) pour diagnostiquer un doute de déterminisme
+# sans dépendre d'une pull request. Assumé tel quel, pas une omission.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  # Le harnais tourne nu en intégration continue, sans docker compose : ces
+  # deux variables (lues par test/harness/lib.sh) remplacent leurs valeurs
+  # par défaut adaptées à un poste de développement local.
+  MYSQL_CLI: mysql -h 127.0.0.1 -P 3306
+  DB_HOST: 127.0.0.1:3306
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Construire le jar depuis les sources
+        run: ./scripts/create-jar.sh
+      - name: Vérifier que le jar contient le bytecode attendu
+        # scripts/create-jar.sh n'a pas de "set -e" (seulement "set -o
+        # pipefail" sur la ligne de compilation) : un javac en échec ne fait
+        # pas échouer le script, qui empaquette quand même ce qui a pu être
+        # compilé et affiche son message de succès. Sans ce contrôle, le job
+        # "build" pourrait devenir vert avec un sheril.jar incomplet, et
+        # l'échec ne se manifesterait que plus tard, de façon confuse, dans
+        # un job aval qui invoque une classe absente.
+        run: |
+          set -euo pipefail
+          jar tf sheril.jar | grep -qx 'Start.class'
+          jar tf sheril.jar | grep -qx 'zIgzAg/jeu/oceane/DumpEtat.class'
+          echo "jar contrôlé : Start.class et DumpEtat.class présents"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sheril-jar
+          path: sheril.jar
+          retention-days: 1
+
+  scenarios:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - 01-combat
+          - 02-colonisation
+          - 03-marche
+          - 04-recherche
+          - 05-alliances
+    services:
+      db:
+        image: mysql:5
+        env:
+          MYSQL_DATABASE: sheril
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -ppassword" --health-interval=5s
+          --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Jouer le scénario
+        run: ./test/harness/run-scenario.sh ${{ matrix.scenario }}
+      - name: Publier le dump et le diff en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dump-${{ matrix.scenario }}
+          path: |
+            test/work/${{ matrix.scenario }}/dump-tour-*.txt
+            test/work/${{ matrix.scenario }}/diff-tour-*.txt
+            test/work/${{ matrix.scenario }}/round-*.log
+            test/work/${{ matrix.scenario }}/init.log
+          retention-days: 7
+
+  determinisme:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mysql:5
+        env:
+          MYSQL_DATABASE: sheril
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -ppassword" --health-interval=5s
+          --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Charger le schéma
+        # check-dumpstate.sh, check-init-determinisme.sh et
+        # check-composants-determinisme.sh appellent tous "moteur init" sans
+        # jamais recharger le schéma eux-mêmes (contrairement à
+        # run-scenario.sh, qui appelle reinitialiser_base en tête). Sur un
+        # service MySQL fraîchement démarré, sans cette étape, le tout
+        # premier "moteur init" échouerait sur des tables absentes. Le
+        # chargement se fait une seule fois ici ; le double "init" sur la
+        # même base au sein de check-init-determinisme.sh est un
+        # comportement déjà attesté idempotent (task-8/9, SHRL-46).
+        run: |
+          set -euo pipefail
+          source test/harness/lib.sh
+          reinitialiser_base
+      - name: Contrôle minimal de Start dumpState
+        run: ./test/harness/check-dumpstate.sh
+      - name: Déterminisme de l'initialisation
+        run: ./test/harness/check-init-determinisme.sh
+      - name: Déterminisme de la description des composants
+        run: ./test/harness/check-composants-determinisme.sh
+      - name: DATE_FIGEE respectée par Utile.getDateRapport
+        run: ./test/harness/check-date-figee.sh
+      - name: Déterminisme d'un tour joué, sur chacun des cinq scénarios
+        # check-determinisme.sh recharge lui-même le schéma (via
+        # run-scenario.sh --workdir, appelé deux fois) : la boucle n'a pas
+        # besoin de l'étape "Charger le schéma" ci-dessus, qui ne sert qu'aux
+        # quatre contrôles précédents. Accumulation des échecs plutôt
+        # qu'arrêt au premier scénario non déterministe (l'échec d'une
+        # commande dans la condition d'un "if" n'active pas le "set -e" du
+        # step) : les cinq scénarios sont exercés même si l'un d'eux échoue.
+        run: |
+          set -euo pipefail
+          echecs=0
+          for scenario in 01-combat 02-colonisation 03-marche 04-recherche 05-alliances; do
+            echo "== déterminisme : $scenario"
+            if ! ./test/harness/check-determinisme.sh "$scenario"; then
+              echo "ECHEC déterminisme: $scenario" >&2
+              echecs=$((echecs+1))
+            fi
+          done
+          test "$echecs" -eq 0
+      - name: Publier les diffs en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinisme-diffs
+          path: |
+            test/work/*diff*.txt
+            test/work/*/dump.txt
+            test/work/init-diff.txt
+            test/work/composants/diff.txt
+            test/work/det-a.log
+            test/work/det-b.log
+          retention-days: 7
+
+  rapports:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mysql:5
+        env:
+          MYSQL_DATABASE: sheril
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -ppassword" --health-interval=5s
+          --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Jouer 02-colonisation
+        run: ./test/harness/run-scenario.sh 02-colonisation
+      - name: Vérifier qu'il y a un rapport XML par commandant humain
+        # Le chemin des rapports du dernier tour joué est
+        # data/tour<TOURS+1>/rapports (cf. run-scenario.sh, en-tête : le
+        # newRound d'inscription fait déjà passer le compteur de 0 à 1, donc
+        # le dump du tour TOURS "rapports" vit sous tour<TOURS+1>). TOURS est
+        # lu depuis scenario.properties, jamais codé en dur ici : un chemin
+        # figé (ex. tour3/rapports) resterait présent après un ajustement du
+        # nombre de tours du scénario et ferait passer ce contrôle sur un
+        # répertoire qui existe mais ne porte plus le dernier tour joué,
+        # rendant l'échec silencieux. run-scenario.sh contrôle déjà que
+        # chaque XML est non vide et bien formé ; ce step ajoute le décompte
+        # par commandant humain, la seule chose que le script ne peut pas
+        # savoir sans connaître le scénario.
+        run: |
+          set -euo pipefail
+          source test/harness/lib.sh
+          tours="$(propriete test/scenarios/02-colonisation/scenario.properties TOURS)"
+          dernier_tour_rapports="test/work/02-colonisation/data/tour$((tours+1))/rapports"
+          echo "dernier tour joué: $tours, rapports attendus dans $dernier_tour_rapports"
+          nb_xml=$(find "$dernier_tour_rapports" -name '*.xml' | wc -l)
+          echo "rapports XML: $nb_xml"
+          test "$nb_xml" -ge 2
