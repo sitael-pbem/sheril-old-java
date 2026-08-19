@@ -54,7 +54,22 @@ revue, ligne à ligne, ce qu'une modification du moteur change réellement dans 
 partie. Tout tourne aussi en intégration continue, `.github/workflows/harness.yml`.
 
 Prérequis : la base de données démarrée (`docker compose up -d db`) et un
-`sheril.jar` à jour contenant l'action `dumpState`.
+`sheril.jar` à jour contenant l'action `dumpState`. Le harnais refuse de démarrer
+sinon, en le disant : `Start` rend 0 sur une action inconnue, donc un jar périmé
+ne produirait aucun dump sans le signaler, et l'échec se manifesterait plus loin
+sous une fausse cause.
+
+Comme `sheril.jar` est suivi par git, un aller-retour de développement le salit à
+chaque recompilation. Pour l'éviter, construire ailleurs et pointer le harnais
+dessus :
+
+```shell
+SHERIL_JAR_SORTIE=test/work/sheril.jar ./scripts/create-jar.sh
+SHERIL_JAR=test/work/sheril.jar bash test/harness/run-scenario.sh 01-combat
+```
+
+`test/work/` est ignoré par git. L'intégration continue ne dépend pas du jar
+versionné : le job `build` le recompile et le publie en artefact.
 
 ### jouer un scénario
 

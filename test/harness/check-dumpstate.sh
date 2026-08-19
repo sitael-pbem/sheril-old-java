@@ -10,14 +10,14 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+verifier_jar
 WORK="$REPO/test/work/dumpstate"
 
 preparer_workdir "$WORK" "" ""
 # Le journal d'init est restitué en cas d'échec, sans quoi un init qui casse
 # fait échouer le contrôle deux lignes plus bas, sur « dump.txt vide », ce qui
 # désigne dumpState alors que la faute est en amont.
-moteur "$WORK" init > "$WORK/init.log" 2>&1 \
-  || { echo "ECHEC: Start init a échoué, journal ci-dessous"; cat "$WORK/init.log"; exit 1; }
+moteur_journalise "$WORK" "$WORK/init.log" init
 moteur "$WORK" dumpState "$WORK/dump.txt"
 
 test -s "$WORK/dump.txt" || { echo "ECHEC: dump.txt vide ou absent"; exit 1; }

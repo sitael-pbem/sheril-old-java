@@ -23,6 +23,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+verifier_jar
 WORK="$REPO/test/work/composants"
 
 preparer_workdir "$WORK" 424242 ""
@@ -40,7 +41,7 @@ for (PlanDeVaisseau p : plans) System.out.println(p.getNom() + " | " + p.descrip
 /exit
 EOF
 
-joue() { ( cd "$WORK" && jshell --class-path "$REPO/sheril.jar" -s "$WORK/descriptions.jsh" 2>/dev/null | grep ' | ' ); }
+joue() { ( cd "$WORK" && jshell --class-path "$JAR" -s "$WORK/descriptions.jsh" 2>/dev/null | grep ' | ' ); }
 
 joue > "$WORK/a.txt"
 joue > "$WORK/b.txt"

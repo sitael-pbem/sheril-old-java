@@ -52,8 +52,21 @@ jobs:
         # un job aval qui invoque une classe absente.
         run: |
           set -euo pipefail
-          jar tf sheril.jar | grep -qx 'Start.class'
-          jar tf sheril.jar | grep -qx 'zIgzAg/jeu/oceane/DumpEtat.class'
+          # Le contenu passe par une variable, pas par « jar tf | grep -q » :
+          # grep -q s'arrête à la première correspondance et peut faire sortir
+          # jar sur SIGPIPE, donc faire échouer le step au moment même où il
+          # trouve ce qu'il cherche. Le verdict ne doit pas dépendre de l'ordre
+          # des entrées de l'archive.
+          # Comparaison ancrée par des sauts de ligne : c'est une égalité
+          # d'entrée d'archive, pas une inclusion de sous-chaîne, sinon
+          # « Start.class » serait satisfait par un « AutreStart.class ».
+          contenu=$'\n'"$(jar tf sheril.jar)"$'\n'
+          for classe in 'Start.class' 'zIgzAg/jeu/oceane/DumpEtat.class'; do
+            case "$contenu" in
+              *$'\n'"$classe"$'\n'*) ;;
+              *) echo "ECHEC: $classe absente du jar produit" >&2; exit 1 ;;
+            esac
+          done
           echo "jar contrôlé : Start.class et DumpEtat.class présents"
       - name: Lister les scénarios
         id: lister

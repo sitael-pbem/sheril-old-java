@@ -112,6 +112,59 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MYSQL_CLI="${MYSQL_CLI:-docker compose exec -T db mysql}"
 DB_HOST="${DB_HOST:-127.0.0.1:3311}"
 
+# Jar employé par tout le harnais. Surchargeable pour viser un binaire de
+# travail construit par SHERIL_JAR_SORTIE=test/work/sheril.jar, sans salir le
+# ./sheril.jar suivi par git.
+#
+# Le chemin est ramené en absolu : moteur() se place dans le répertoire de
+# travail du scénario avant d'appeler java, donc un SHERIL_JAR relatif (la
+# forme naturelle, test/work/sheril.jar) n'y résoudrait plus. Vécu en posant le
+# témoin de cette garde : ClassNotFoundException sur Start, cause invisible
+# parce qu'elle partait dans init.log.
+JAR="${SHERIL_JAR:-$REPO/sheril.jar}"
+case "$JAR" in /*) ;; *) JAR="$(cd "$(dirname "$JAR")" 2>/dev/null && pwd)/$(basename "$JAR")" ;; esac
+
+# Refuse de démarrer si le jar ne porte pas le bytecode de dumpState.
+#
+# Ce contrôle existe en intégration continue depuis la tâche 10, sur le jar que
+# le job build publie. Il n'existait PAS en local, et c'est pourtant là que
+# l'incident s'est produit deux fois : le ./sheril.jar suivi par git est en
+# retard sur les sources, et Start.main N'ÉCHOUE PAS sur une action inconnue,
+# il affiche son aide et rend 0. Un `Start dumpState fichier` sur un jar périmé
+# ne produit donc aucun fichier, sans le dire, et le harnais échoue plus loin
+# en désignant la mauvaise cause, sur une résolution de marqueur ou une
+# comparaison de golden. Les deux faux signaux vécus (« des galaxies
+# différentes entre deux répétitions ») venaient de là.
+verifier_jar() {
+  if [ ! -f "$JAR" ]; then
+    echo "ECHEC: $JAR est absent. Construire le jar : bash scripts/create-jar.sh" >&2
+    return 1
+  fi
+  # Le contenu passe par une variable plutôt que par « jar tf | grep -q ». Sous
+  # set -o pipefail, grep -q s'arrête à la première correspondance, ce qui peut
+  # faire sortir jar sur SIGPIPE (141) : le pipeline échouerait alors qu'il
+  # vient précisément de TROUVER la classe, et la garde accuserait un jar sain.
+  # Un contrôle ne doit pas tirer son verdict d'un statut qui dépend de l'ordre
+  # d'entrées dans une archive.
+  # La comparaison est ancrée par des sauts de ligne, pour rester une égalité
+  # d'entrée et non une inclusion de sous-chaîne : « Start.class » ne doit pas
+  # être satisfait par « zIgzAg/.../AutreStart.class ».
+  local contenu
+  contenu="$(jar tf "$JAR" 2>/dev/null || true)"
+  case $'\n'"$contenu"$'\n' in
+    *$'\n'"zIgzAg/jeu/oceane/DumpEtat.class"$'\n'*) ;;
+    *)
+    echo "ECHEC: $JAR ne contient pas DumpEtat.class, il est périmé par rapport aux sources." >&2
+    echo "       Le harnais en a besoin pour l'action dumpState, et Start rend 0 sur une" >&2
+    echo "       action inconnue, donc l'échec se manifesterait plus loin sous une fausse cause." >&2
+    echo "       Reconstruire : bash scripts/create-jar.sh" >&2
+    echo "       Ou, pour ne pas salir le jar suivi par git :" >&2
+    echo "       SHERIL_JAR_SORTIE=test/work/sheril.jar bash scripts/create-jar.sh" >&2
+    echo "       puis SHERIL_JAR=test/work/sheril.jar avant de relancer le harnais." >&2
+      return 1 ;;
+  esac
+}
+
 # Recharge un schéma vierge dans la base sheril.
 reinitialiser_base() {
   ( cd "$REPO" && $MYSQL_CLI -uroot -ppassword -e "DROP DATABASE IF EXISTS sheril; CREATE DATABASE sheril;" )
@@ -156,7 +209,23 @@ EOF
 # Lance une action du moteur depuis le répertoire d'exécution.
 moteur() {
   local work="$1"; shift
-  ( cd "$work" && java -cp "$REPO/sheril.jar" Start "$@" )
+  ( cd "$work" && java -cp "$JAR" Start "$@" )
+}
+
+# Même chose, mais en journalisant, et en RESTITUANT le journal si l'action
+# échoue. Sans cela, un moteur qui ne démarre pas fait avorter l'appelant sous
+# set -e en n'ayant rien imprimé d'autre que la ligne « -- init » qui précède :
+# la cause réelle reste enfermée dans un fichier que personne ne va lire, et
+# l'échec paraît venir de l'étape suivante. Vécu en posant le témoin de la
+# garde de jar, sur un ClassNotFoundException.
+# $1 répertoire, $2 fichier de journal, puis l'action et ses arguments.
+moteur_journalise() {
+  local work="$1" journal="$2"; shift 2
+  if ! moteur "$work" "$@" > "$journal" 2>&1; then
+    echo "ECHEC: le moteur a échoué sur l'action « $* », journal ci-dessous ($journal)" >&2
+    cat "$journal" >&2
+    return 1
+  fi
 }
 
 # Lit une clé de scenario.properties. Échoue si la clé est absente OU si elle

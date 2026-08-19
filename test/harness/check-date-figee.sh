@@ -3,13 +3,18 @@
 # doit la retourner telle quelle. Quand elle est absente, la date du jour.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# lib.sh n'est sourcé que pour REPO, JAR et verifier_jar : ce contrôle n'a
+# besoin ni de la base ni du moteur, mais il doit honorer la même surcharge de
+# jar et la même garde que les autres, sinon un jar périmé le ferait échouer
+# sur une comparaison de date au lieu de le dire.
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+verifier_jar
 WORK="$REPO/test/work/date-figee"
 rm -rf "$WORK" && mkdir -p "$WORK"
 
 appel() {
   ( cd "$WORK" && echo 'System.out.println(zIgzAg.jeu.oceane.Utile.getDateRapport());' \
-      | jshell --class-path "$REPO/sheril.jar" -s - 2>/dev/null | tr -d '\r' | grep -E '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' )
+      | jshell --class-path "$JAR" -s - 2>/dev/null | tr -d '\r' | grep -E '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' )
 }
 
 sed 's|^NOTIFY_BOT.*|NOTIFY_BOT = false|' "$REPO/config.properties.sample" > "$WORK/config.properties"

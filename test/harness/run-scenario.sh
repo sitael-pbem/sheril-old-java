@@ -42,6 +42,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+verifier_jar
 DIR="$REPO/test/scenarios/$SCENARIO"
 test -d "$DIR" || { echo "scénario inconnu: $SCENARIO" >&2; exit 2; }
 
@@ -80,13 +81,13 @@ preparer_workdir "$WORK" "$SEED" "$DATE_FIGEE"
 reinitialiser_base
 
 echo "-- init"
-moteur "$WORK" init > "$WORK/init.log" 2>&1
+moteur_journalise "$WORK" "$WORK/init.log" init
 
 echo "-- setup.sql"
 injecter_sql "$DIR/setup.sql"
 
 echo "-- newRound d'inscription"
-moteur "$WORK" newRound > "$WORK/round-0.log" 2>&1
+moteur_journalise "$WORK" "$WORK/round-0.log" newRound
 moteur "$WORK" dumpState "$WORK/dump-tour-0.txt"
 
 for n in $(seq 1 "$TOURS"); do
@@ -104,7 +105,7 @@ for n in $(seq 1 "$TOURS"); do
   fi
 
   echo "-- tour $n : newRound"
-  moteur "$WORK" newRound > "$WORK/round-$n.log" 2>&1
+  moteur_journalise "$WORK" "$WORK/round-$n.log" newRound
   moteur "$WORK" dumpState "$WORK/dump-tour-$n.txt"
 
   assertions_tour="$DIR/assertions-tour-$n.txt"
