@@ -36,6 +36,9 @@ public class Const {
     /** Graine du générateur aléatoire. null = comportement de production. */
     public static Long RANDOM_SEED = null;
 
+    /** Date affichée dans les rapports, au format JJ/MM/AAAA. null = date du jour. */
+    public static String DATE_FIGEE = null;
+
     static {
         Properties properties = new Properties();
         try {
@@ -79,6 +82,11 @@ public class Const {
               } catch (NumberFormatException e) {
                 System.out.println("RANDOM_SEED invalide dans config.properties (" + seedProp.trim() + "), hasard non semé");
               }
+            }
+
+            String dateProp = properties.getProperty("DATE_FIGEE");
+            if (dateProp != null && !dateProp.trim().isEmpty()) {
+              DATE_FIGEE = dateProp.trim();
             }
 
         } catch (IOException e) {
