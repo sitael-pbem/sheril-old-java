@@ -1,0 +1,7 @@
+-- Tour d'attente : aucune marchandise n'est disponible en stock avant ce
+-- premier round (dump-tour-0 : zero marchandise pour tous), la production
+-- (Possession.evolutionPosteCo, appelee depuis
+-- DeroulementDuTour.gestionFinDeTour, DONC APRES le traitement des ordres du
+-- meme tour) ne credite les possessions qu'a la fin de CE tour. Vendre au
+-- tour 1 echouerait donc (ER_COMMANDANT_VENTE_GALACTIQUE_0002, quantite
+-- presente < quantite demandee).

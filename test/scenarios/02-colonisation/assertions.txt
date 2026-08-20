@@ -1,0 +1,24 @@
+# Le golden détecte le changement, ces assertions garantissent qu'il reste
+# quelque chose à détecter. Chaque ligne non vide et non commentée doit
+# apparaître telle quelle dans le dump du dernier tour.
+#
+# "tour" vaut TOURS+1 : dump-tour-N.txt est capturé après le newRound du
+# tour N, et le premier newRound (inscription, avant la boucle des tours)
+# fait déjà passer le compteur interne de 0 à 1.
+tour = 9
+commandant.1.nom = Colon
+commandant.2.nom = Temoin
+commandant.1.humain = true
+commandant.2.humain = true
+#
+# Effet de jeu : la planète 0 du système capital de Colon ("Yo 1"), éradiquée
+# puis repeuplée au tour 6 (turn-6.sql, voir son en-tête pour la démonstration
+# complète que utiliser_colonisateur ne peut ici que ça, jamais un changement
+# de propriétaire), puis retaxée deux fois (turn-7.sql, turn-8.sql).
+# Quatre lignes discriminantes, vérifiées rouge sur une variante sans
+# turn-6.sql (population.1 = 790, stabilite = 100, reputation = 40, sans la
+# chute que provoque l'éradication) :
+systeme.0_10_17.planete.0.taxation = 0
+systeme.0_10_17.planete.0.stabilite = 94
+systeme.0_10_17.planete.0.population.1 = 229
+commandant.1.reputation = -240

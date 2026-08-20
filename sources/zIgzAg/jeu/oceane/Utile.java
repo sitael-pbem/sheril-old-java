@@ -216,6 +216,8 @@ public class Utile {
 	}
 
 	public static String getDateRapport() {
+		if (Const.DATE_FIGEE != null)
+			return Const.DATE_FIGEE;
 		GregorianCalendar gc = new GregorianCalendar();
 		String retour = changeInt(gc.get(GregorianCalendar.DAY_OF_MONTH));
 		retour = retour + "/" + changeInt(gc.get(GregorianCalendar.MONTH) + 1);

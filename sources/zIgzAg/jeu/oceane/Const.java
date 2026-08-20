@@ -33,6 +33,12 @@ public class Const {
     public static Boolean FAKE_TURN = false;
     public static String PATH_PHP = "./php/";
 
+    /** Graine du générateur aléatoire. null = comportement de production. */
+    public static Long RANDOM_SEED = null;
+
+    /** Date affichée dans les rapports, au format JJ/MM/AAAA. null = date du jour. */
+    public static String DATE_FIGEE = null;
+
     static {
         Properties properties = new Properties();
         try {
@@ -67,6 +73,20 @@ public class Const {
             String pathPhpProp = properties.getProperty("PATH_PHP");
             if (pathPhpProp != null && !pathPhpProp.isEmpty()) {
               PATH_PHP = pathPhpProp;
+            }
+
+            String seedProp = properties.getProperty("RANDOM_SEED");
+            if (seedProp != null && !seedProp.trim().isEmpty()) {
+              try {
+                RANDOM_SEED = Long.valueOf(seedProp.trim());
+              } catch (NumberFormatException e) {
+                System.out.println("RANDOM_SEED invalide dans config.properties (" + seedProp.trim() + "), hasard non semé");
+              }
+            }
+
+            String dateProp = properties.getProperty("DATE_FIGEE");
+            if (dateProp != null && !dateProp.trim().isEmpty()) {
+              DATE_FIGEE = dateProp.trim();
             }
 
         } catch (IOException e) {

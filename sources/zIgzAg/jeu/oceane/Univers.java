@@ -39,6 +39,20 @@ public class Univers {
 
 	private static Random HASARD;
 
+	// Seed injectable pour rendre le moteur reproductible (harnais de non-régression).
+	// null = comportement historique (graine aléatoire).
+	// Positionné par Start.main avant toute résolution (priorité CLI > env > Const.RANDOM_SEED).
+	private static Long SEED = null;
+
+	public static void setSeed(Long s) { SEED = s; }
+
+	public static Long getSeed() { return SEED; }
+
+	// Le générateur unique de l'univers. Exposé pour que les mélanges de
+	// collections tirent de la même source que le reste du hasard, donc
+	// de la graine quand elle est fixée.
+	public static Random getHasard() { return HASARD; }
+
 	private static TreeMap LISTE_TECHNOLOGIES;
 
 	private static TreeMap LISTE_CARAC_ARMES;
@@ -621,7 +635,7 @@ public class Univers {
 
 		ArrayList selection = new ArrayList();
 		ArrayList restants = new ArrayList(Arrays.asList(disponibles));
-		Collections.shuffle(restants);
+		Collections.shuffle(restants, HASARD); // route sur le RNG central seedable
 
 		// On cherche à maximiser la distance entre les points de départ.
 		// Pour chaque nouveau point, on choisit celui qui est le plus loin des points déjà sélectionnés.
@@ -1097,7 +1111,9 @@ public class Univers {
 		LISTE_DESCRIPTION = new ListeDescription();
 		MESSAGES = new Messages();
 		MESSAGES_INFO = new MessagesInfo();
-		HASARD = new Random();
+		HASARD = (SEED != null) ? new Random(SEED)
+		       : (Const.RANDOM_SEED != null) ? new Random(Const.RANDOM_SEED)
+		       : new Random();
 		LISTE_CARAC_ARMES = chargerDynamiquement(LISTE_CARAC_ARMES, "zIgzAg.jeu.oceane.ListeCaracArmes");
 		LISTE_CHANCES_TOUCHE = chargerDynamiquement(LISTE_CHANCES_TOUCHE, "zIgzAg.jeu.oceane.ListeChancesDeToucherArmes");
 		LISTE_TECHNOLOGIES = chargerDynamiquement(LISTE_TECHNOLOGIES, "zIgzAg.jeu.oceane.ListeTechnologique");

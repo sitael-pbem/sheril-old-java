@@ -1,0 +1,424 @@
+name: Harnais de non-régression
+
+# compile.yml (déclenché sur pull_request uniquement) reste inchangé et
+# continue de rendre la main en une trentaine de secondes. Ce fichier ne le
+# remplace pas, il s'y ajoute. Les deux workflows n'écoutent pas les mêmes
+# événements : compile.yml n'a pas besoin de push/workflow_dispatch (son seul
+# rôle est le garde-fou de compilation avant merge), alors que harness.yml
+# doit pouvoir attester le main après merge (push) et être rejouable à la
+# demande (workflow_dispatch) pour diagnostiquer un doute de déterminisme
+# sans dépendre d'une pull request. Assumé tel quel, pas une omission.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Aucun job n'écrit sur le dépôt, n'ouvre de PR ni ne pose de statut au-delà
+# de ce que le runner fait lui-même : contents: read suffit, pas besoin des
+# permissions par défaut du token (écriture incluse) que GitHub accorderait
+# sinon.
+permissions:
+  contents: read
+
+env:
+  # Le harnais tourne nu en intégration continue, sans docker compose : ces
+  # deux variables (lues par test/harness/lib.sh) remplacent leurs valeurs
+  # par défaut adaptées à un poste de développement local.
+  MYSQL_CLI: mysql -h 127.0.0.1 -P 3306
+  DB_HOST: 127.0.0.1:3306
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      scenarios: ${{ steps.lister.outputs.scenarios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Construire le jar depuis les sources
+        run: ./scripts/create-jar.sh
+      - name: Vérifier que le jar contient le bytecode attendu
+        # scripts/create-jar.sh n'a pas de "set -e" (seulement "set -o
+        # pipefail" sur la ligne de compilation) : un javac en échec ne fait
+        # pas échouer le script, qui empaquette quand même ce qui a pu être
+        # compilé et affiche son message de succès. Sans ce contrôle, le job
+        # "build" pourrait devenir vert avec un sheril.jar incomplet, et
+        # l'échec ne se manifesterait que plus tard, de façon confuse, dans
+        # un job aval qui invoque une classe absente.
+        run: |
+          set -euo pipefail
+          # Le contenu passe par une variable, pas par « jar tf | grep -q » :
+          # grep -q s'arrête à la première correspondance et peut faire sortir
+          # jar sur SIGPIPE, donc faire échouer le step au moment même où il
+          # trouve ce qu'il cherche. Le verdict ne doit pas dépendre de l'ordre
+          # des entrées de l'archive.
+          # Comparaison ancrée par des sauts de ligne : c'est une égalité
+          # d'entrée d'archive, pas une inclusion de sous-chaîne, sinon
+          # « Start.class » serait satisfait par un « AutreStart.class ».
+          contenu=$'\n'"$(jar tf sheril.jar)"$'\n'
+          for classe in 'Start.class' 'zIgzAg/jeu/oceane/DumpEtat.class'; do
+            case "$contenu" in
+              *$'\n'"$classe"$'\n'*) ;;
+              *) echo "ECHEC: $classe absente du jar produit" >&2; exit 1 ;;
+            esac
+          done
+          echo "jar contrôlé : Start.class et DumpEtat.class présents"
+      - name: Lister les scénarios
+        id: lister
+        # Dérive la liste des scénarios de test/scenarios/ au lieu de la
+        # coder en dur dans les jobs matrixés dessus ("scenarios" et
+        # "determinisme-scenarios") : un scénario ajouté sous
+        # test/scenarios/ apparaît automatiquement dans les deux matrices.
+        # Avec une liste figée à deux endroits, un scénario oublié dans l'une
+        # des deux, ou dans les deux, resterait silencieusement absent,
+        # jamais joué, sans faire échouer le workflow.
+        run: |
+          set -euo pipefail
+          scenarios=$(find test/scenarios -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+          # Garde de non-vacuité (même motif que run-scenario.sh pour le
+          # compteur de XML et les assertions, check-determinisme.sh pour les
+          # rapports, check-composants-determinisme.sh pour le seuil
+          # minimal) : un test/scenarios/ présent mais sans sous-répertoire
+          # fait rendre "find" avec un statut 0 et une sortie vide, ce n'est
+          # pas un cas d'échec pour "find" contrairement à un chemin absent
+          # (qui ferait tomber le pipe sous pipefail). Sans cette garde, le
+          # JSON vaudrait "[]", un JSON valide : ce step réussirait, "build"
+          # réussirait, le jar se publierait, et les deux jobs matrixés sur
+          # cette liste ("scenarios", "determinisme-scenarios") recevraient
+          # une matrice à zéro combinaison, donc n'exécuteraient rien du tout
+          # (skipped, pas en échec), sans qu'aucun job aval n'en dépende par
+          # needs pour faire basculer la conclusion du run. Le workflow
+          # entier serait vert sans avoir exercé un seul scénario.
+          if [ -z "$scenarios" ]; then
+            echo "ECHEC: aucun scénario trouvé sous test/scenarios/ (répertoire vide ou inexistant de sous-répertoires)" >&2
+            exit 1
+          fi
+          echo "scénarios découverts:"
+          echo "$scenarios"
+          json=$(printf '%s\n' "$scenarios" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "scenarios=$json" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sheril-jar
+          path: sheril.jar
+          retention-days: 1
+          if-no-files-found: error
+
+  scenarios:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJson(needs.build.outputs.scenarios) }}
+    services:
+      # Image mysql:5 conservée telle quelle : pas d'équivalent Chainguard
+      # pour un serveur MySQL. Le choix de la version (5, pas 8, pas une
+      # image cgr.dev/chainguard/mysql qui n'existe pas) suit
+      # docker-compose.yml, utilisé pour le développement local du harnais :
+      # faire diverger la version du serveur entre le poste de développement
+      # et l'intégration continue rendrait les goldens suspects, un ordre ou
+      # un dump pourrait se comporter différemment pour une raison qui n'a
+      # rien à voir avec le moteur testé.
+      db: &mysql-service
+        image: mysql:5
+        env:
+          MYSQL_DATABASE: sheril
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -ppassword" --health-interval=5s
+          --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Jouer le scénario
+        run: ./test/harness/run-scenario.sh ${{ matrix.scenario }}
+      - name: Publier le dump et le diff en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dump-${{ matrix.scenario }}
+          if-no-files-found: error
+          path: |
+            test/work/${{ matrix.scenario }}/dump-tour-*.txt
+            test/work/${{ matrix.scenario }}/diff-tour-*.txt
+            test/work/${{ matrix.scenario }}/round-*.log
+            test/work/${{ matrix.scenario }}/init.log
+          retention-days: 7
+
+  determinisme:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      db: *mysql-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Charger le schéma
+        # check-dumpstate.sh, check-init-determinisme.sh et
+        # check-composants-determinisme.sh appellent tous "moteur init" sans
+        # jamais recharger le schéma eux-mêmes (contrairement à
+        # run-scenario.sh, qui appelle reinitialiser_base en tête). Sur un
+        # service MySQL fraîchement démarré, sans cette étape, le tout
+        # premier "moteur init" échouerait sur des tables absentes. Le
+        # chargement se fait une seule fois ici ; le double "init" sur la
+        # même base au sein de check-init-determinisme.sh est un
+        # comportement déjà attesté idempotent (task-8/9, SHRL-46).
+        run: |
+          set -euo pipefail
+          source test/harness/lib.sh
+          reinitialiser_base
+      - name: Contrôle minimal de Start dumpState
+        run: ./test/harness/check-dumpstate.sh
+      - name: Déterminisme de l'initialisation
+        # if: always() sur ce step et les deux suivants : sans ça, le
+        # premier des quatre contrôles à échouer masque les autres (le job
+        # s'arrête), alors qu'ils sont indépendants et que le tableau complet
+        # aide au diagnostic. Le verdict du job n'en est pas changé : il
+        # reste en échec dès qu'un des quatre l'est.
+        if: always()
+        run: ./test/harness/check-init-determinisme.sh
+      - name: Déterminisme de la description des composants
+        if: always()
+        run: ./test/harness/check-composants-determinisme.sh
+      - name: DATE_FIGEE respectée par Utile.getDateRapport
+        if: always()
+        run: ./test/harness/check-date-figee.sh
+      - name: Publier les diffs en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinisme-diffs
+          if-no-files-found: error
+          path: |
+            test/work/*diff*.txt
+            test/work/*/dump.txt
+            test/work/init-diff.txt
+            test/work/composants/diff.txt
+          retention-days: 7
+
+  determinisme-scenarios:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJson(needs.build.outputs.scenarios) }}
+    services:
+      db: *mysql-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Déterminisme d'un tour joué
+        # check-determinisme.sh recharge lui-même le schéma (via
+        # run-scenario.sh --workdir, appelé deux fois) : ce job n'a pas
+        # besoin d'un step "Charger le schéma".
+        #
+        # Un job par scénario, chacun sur son propre runner et sa propre base
+        # de service : contrairement à une boucle dans un seul job,
+        # check-determinisme.sh écrase test/work/det-a, test/work/det-b et
+        # les det-diff-<n>.txt à chaque appel (mêmes noms de fichiers,
+        # indépendants du scénario), et ne laisserait donc que les artefacts
+        # du DERNIER scénario joué, désignant la mauvaise cause si un
+        # scénario antérieur avait échoué ou s'était arrêté durement.
+        run: ./test/harness/check-determinisme.sh ${{ matrix.scenario }}
+      - name: Publier les diffs en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinisme-diffs-${{ matrix.scenario }}
+          if-no-files-found: error
+          path: |
+            test/work/det-diff-*.txt
+            test/work/det-a.log
+            test/work/det-b.log
+          retention-days: 7
+
+  rapports:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db: *mysql-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Jouer 02-colonisation
+        run: ./test/harness/run-scenario.sh 02-colonisation
+      - name: Vérifier qu'il y a un rapport XML par commandant humain
+        # Le chemin des rapports du dernier tour joué est
+        # data/tour<TOURS+1>/rapports (cf. run-scenario.sh, en-tête : le
+        # newRound d'inscription fait déjà passer le compteur de 0 à 1, donc
+        # le dump du tour TOURS "rapports" vit sous tour<TOURS+1>). TOURS est
+        # lu depuis scenario.properties, jamais codé en dur ici : un chemin
+        # figé (ex. tour3/rapports) resterait présent après un ajustement du
+        # nombre de tours du scénario et ferait passer ce contrôle sur un
+        # répertoire qui existe mais ne porte plus le dernier tour joué,
+        # rendant l'échec silencieux.
+        #
+        # Le nombre attendu de rapports est lui aussi dérivé, du nombre
+        # d'INSERT INTO aa_inscription dans setup.sql (deux commandants
+        # humains aujourd'hui), et comparé avec -eq, pas -ge : un troisième
+        # joueur ajouté à setup.sql sans qu'un rapport ne soit produit pour
+        # lui resterait invisible à un seuil minimal, alors qu'un décompte
+        # exact le détecte.
+        run: |
+          set -euo pipefail
+          source test/harness/lib.sh
+          tours="$(tours_du_scenario test/scenarios/02-colonisation/scenario.properties)"
+          dernier_tour_rapports="test/work/02-colonisation/data/tour$((tours+1))/rapports"
+          nb_attendu=$(grep -c '^INSERT INTO aa_inscription' test/scenarios/02-colonisation/setup.sql)
+          echo "dernier tour joué: $tours, rapports attendus dans $dernier_tour_rapports"
+          echo "commandants humains attendus (setup.sql): $nb_attendu"
+          nb_xml=$(find "$dernier_tour_rapports" -name '*.xml' | wc -l)
+          echo "rapports XML: $nb_xml"
+          test "$nb_xml" -eq "$nb_attendu"
+
+  captures:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Non négociable : une capture visuelle qui échoue (Chrome absent ou
+    # instable sur le runner, page HTML récalcitrante) ne doit jamais faire
+    # tomber le golden. Mais continue-on-error ne dispense pas ce job de DIRE
+    # ce qu'il a produit : voir le step "Capturer les rapports et compter la
+    # production" plus bas, dont la garde de non-vacuité rend explicitement
+    # visible (log + résumé du run) un job qui n'a rendu aucune page, plutôt
+    # que de laisser continue-on-error avaler l'écart en silence. Motif déjà
+    # rencontré cinq fois dans ce chantier (SHRL-46) : un job ou une boucle
+    # verte sans avoir rien exercé.
+    continue-on-error: true
+    services:
+      db: *mysql-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: actions/download-artifact@v4
+        with:
+          name: sheril-jar
+      - name: Installer le client MySQL
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Vérifier la présence d'un Chrome
+        run: |
+          set -euo pipefail
+          if command -v google-chrome || command -v chromium-browser || command -v chromium; then
+            echo "Chrome déjà présent sur le runner"
+          else
+            echo "Aucun Chrome, installation de chromium-browser"
+            sudo apt-get install -y chromium-browser
+          fi
+      - name: Jouer 02-colonisation
+        run: ./test/harness/run-scenario.sh 02-colonisation
+      - name: Capturer les rapports et compter la production réelle
+        # Le chemin du dernier tour joué se dérive de TOURS
+        # (scenario.properties), exactement comme le job "rapports"
+        # ci-dessus : TOURS = 8 aujourd'hui donne data/tour9/rapports, pas le
+        # data/tour3/rapports d'une version antérieure du scénario (qui
+        # existe toujours sur disque, avec du XML dedans, et capturerait
+        # silencieusement un tour où il ne se passe plus rien si le chemin
+        # restait codé en dur).
+        #
+        # Garde de non-vacuité (même motif que run-scenario.sh, check-
+        # composants-determinisme.sh, et le step "Lister les scénarios" du
+        # job "build") : le compte réel de PNG produits est la seule preuve
+        # que ce job a rendu quelque chose. continue-on-error (job) absorbe
+        # un échec de rendu partiel (statut_script != 0 mais des pages sont
+        # quand même sorties), mais zéro PNG produit est traité comme un
+        # échec net et explicite de ce step, pour rester visible dans les
+        # logs et le résumé du run malgré continue-on-error.
+        run: |
+          set -euo pipefail
+          source test/harness/lib.sh
+          tours="$(tours_du_scenario test/scenarios/02-colonisation/scenario.properties)"
+          dernier_tour_rapports="test/work/02-colonisation/data/tour$((tours+1))/rapports"
+          echo "dernier tour joué: $tours, rapports capturés depuis $dernier_tour_rapports"
+
+          mkdir -p capture-rapports
+          statut_script=0
+          python3 scripts/capture-rapports.py "$dernier_tour_rapports" -o capture-rapports || statut_script=$?
+          # -size +0c, pas un simple -name : le script lui-même (capturer(),
+          # ok_png = png.exists() and png.stat().st_size > 0) traite un PNG
+          # de taille nulle comme un échec de rendu. Compter les fichiers par
+          # seule présence compterait comme "capture produite" un rendu qui a
+          # simplement laissé un fichier vide derrière lui (Chrome instable,
+          # page qui plante), rouvrant exactement le trou que cette garde
+          # existe pour fermer.
+          nb_png=$(/usr/bin/find capture-rapports -name '*.png' -size +0c | wc -l)
+          nb_pdf=$(/usr/bin/find capture-rapports -name '*.pdf' -size +0c | wc -l)
+
+          echo "script de capture : code retour $statut_script"
+          echo "pages produites : $nb_png PNG, $nb_pdf PDF"
+          {
+            echo "### Captures visuelles (02-colonisation, tour $tours)"
+            echo "- script de capture : code retour $statut_script"
+            echo "- pages produites : $nb_png PNG, $nb_pdf PDF"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Les commandes de workflow (::error::, ::warning::) sont lues sur la
+          # SORTIE STANDARD, pas sur stderr. Les router vers stderr les
+          # réduisait à des lignes de journal ordinaires. Ce job portant
+          # continue-on-error, l'annotation est le seul signal qui remonte
+          # visiblement quand il n'a rendu aucune page.
+          if [ "$nb_png" -eq 0 ]; then
+            echo "::error::aucune capture produite (0 PNG) : ce job n'a rendu aucune page. Ce serait exactement le défaut « vert sans avoir rien exercé » déjà rencontré ailleurs dans ce chantier (SHRL-46)."
+            exit 1
+          fi
+          if [ "$statut_script" -ne 0 ]; then
+            echo "::warning::le script de capture est sorti en $statut_script ($nb_png PNG produits malgré tout) : certaines pages n'ont pas pu être rendues, voir les logs ci-dessus."
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: captures-rapports
+          path: |
+            capture-rapports/**/*.png
+            capture-rapports/**/*.pdf
+            capture-rapports/index.html
+          if-no-files-found: error
+          retention-days: 14

@@ -19,6 +19,7 @@ public class Start {
         System.out.println("addNewGalaxy <num>: Ajoute une galaxy à l'Univers");
         System.out.println("newRound: passe le tour");
         System.out.println("listNeutralFleets: affiche la liste des flottes du neutre");
+        System.out.println("dumpState <fichier> [--complet]: écrit l'état de l'univers en texte");
     }
 
     public static void main(String[] args) {
@@ -28,6 +29,38 @@ public class Start {
             System.out.println("Vous devez spécifier au moins un paramètre");
             displayHelp();
             System.exit(-1);
+        }
+
+        // --- Résolution du seed RNG (priorité : CLI --seed=N > env SHERIL_SEED
+        // > RANDOM_SEED de config.properties > défaut aléatoire). Doit précéder
+        // toute création d'Univers pour que HASARD soit seedé. Le repli sur
+        // Const.RANDOM_SEED est appliqué directement dans Univers (à l'affectation
+        // de HASARD), pas ici : cf. Univers.setSeed / Univers.HASARD.
+        Long seed = null;
+        for (String a : args) {
+            if (a != null && a.startsWith("--seed=")) {
+                try { seed = Long.parseLong(a.substring("--seed=".length()).trim()); }
+                catch (NumberFormatException e) {
+                    System.out.println("[RNG] --seed invalide, ignoré: " + a);
+                }
+            }
+        }
+        if (seed == null) {
+            String env = System.getenv("SHERIL_SEED");
+            if (env != null && !env.trim().isEmpty()) {
+                try { seed = Long.parseLong(env.trim()); }
+                catch (NumberFormatException e) {
+                    System.out.println("[RNG] SHERIL_SEED invalide, ignoré: " + env);
+                }
+            }
+        }
+        Univers.setSeed(seed);
+        if (seed != null) {
+            System.out.println("[RNG] seed=" + seed + " (fixe, reproductible, via --seed/SHERIL_SEED)");
+        } else if (Const.RANDOM_SEED != null) {
+            System.out.println("[RNG] seed=" + Const.RANDOM_SEED + " (fixe, reproductible, via config.properties)");
+        } else {
+            System.out.println("[RNG] seed=aleatoire (defaut, non reproductible)");
         }
 
         if (args[0].equals("init")) {
@@ -43,6 +76,20 @@ public class Start {
             newRound();
         } else if (args[0].equals("listFleet")) {
             listNeutralFleets();
+        } else if (args[0].equals("dumpState")) {
+            if (args.length < 2) {
+                System.out.println("Il faut spécifier le fichier de sortie");
+                displayHelp();
+                System.exit(-1);
+            }
+            boolean complet = (args.length > 2) && args[2].equals("--complet");
+            try {
+                DumpEtat.ecrire(args[1], complet);
+            } catch (IOException e) {
+                System.out.println("Erreur d'écriture du dump " + args[1]);
+                e.printStackTrace();
+                System.exit(-1);
+            }
         } else if (args[0].equals("help")) {
             displayHelp();
         } else {

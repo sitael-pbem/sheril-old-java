@@ -1,0 +1,8 @@
+# Effet de la recherche affectée en turn-1.sql : diploI est acquise en fin
+# de tour 1 (Commandant.resolutionProgressionRecherche), condition
+# indispensable à creer_alliance à partir du tour 2 (Commandant.java:2298-2300).
+# Clé absente sans le modifier_budget et l'affecter_recherche de turn-1.sql :
+# commandant.1.technologies resterait "metauxII,scanI" (techs de départ de
+# la race 0, Const.RACE_TECHNOLOGIES, Const.java:592).
+tour = 2
+commandant.1.technologies = diploI,metauxII,scanI
