@@ -44,6 +44,16 @@ TOURS="$(tours_du_scenario "$REPO/test/scenarios/$SCENARIO/scenario.properties")
 capturer() {
   local workdir="$1" log="$1.log"
   rm -rf "$workdir"
+  # Le répertoire parent doit exister AVANT la redirection. test/work/ est
+  # ignoré par git, donc absent d'un checkout neuf : sans ce mkdir, "> $log"
+  # échoue, le "|| true" ci-dessous avale l'échec, et le script poursuit pour
+  # rapporter « dump manquant, cause dans $log » en désignant un journal qui
+  # n'a jamais été créé. Défaut de PREMIER LANCEMENT, structurellement
+  # invisible en local où test/work/ survit d'une exécution à l'autre, et
+  # révélé par la première exécution réelle en intégration continue (SHRL-46).
+  # C'est aussi la raison pour laquelle run-scenario.sh ne le rencontre pas :
+  # son preparer_workdir fait le mkdir avant d'écrire quoi que ce soit.
+  mkdir -p "$(dirname "$log")"
   "$REPO/test/harness/run-scenario.sh" "$SCENARIO" --workdir "$workdir" > "$log" 2>&1 || true
 }
 
